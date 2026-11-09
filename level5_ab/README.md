@@ -53,6 +53,21 @@ That's 2 runs x 6 tasks x 2 versions = 24 agent runs, plus 12 judge calls. If yo
 - **At this sample size, noise is real.** 2 out of 2 versus 1 out of 2 is not a result. The fix is cheap, though: run `--n 5` overnight. Evals are something you can afford to run a hundred times, which you definitely can't say about a human reviewer.
 - **This is also how you'd compare models.** Set `AGENT_MODEL` in `.env` and re-run. Same table, different question. Everyone wants to know "is the new model better for my task?", and this is the only honest way I know to find out.
 
+## What this repo didn't cover
+
+To be clear about what you just did: you built one small agent, with three tools, on a toy project, and measured it with six tasks. That's enough to see how all the pieces fit together. It's nowhere near the whole field, and I'd hate for anyone to walk away thinking it was. Here's some of what we skipped, roughly in the order you'd probably run into it:
+
+- **Prompt engineering.** Our system prompt is six lines, and we changed one of them. Real agents have long, carefully tested prompts: how to plan, when to ask for help, what to do when stuck, examples of good and bad behavior. Tool descriptions are prompts too, and they're often where the biggest wins are.
+- **Better tools.** Three generic tools is the bare minimum. Claude Code has a dozen purpose-built ones (`Edit`, `Grep`, `Glob`, and so on), and designing tools the model uses reliably is a big part of building a good agent.
+- **More complex agents.** Ours is one loop that runs until it's done. Real systems add planning steps, subagents that handle part of a task with their own context, multiple agents working together, memory that lasts across sessions, and context management for tasks too long to fit in one conversation.
+- **Retrieval (RAG).** Our agent can see every file because there are only five. On a real codebase or a pile of documentation, the agent has to _find_ the right information first, through search or embeddings or both. Retrieval is its own system with its own failure modes, and you'd evaluate it separately: did it find the right thing, before you even ask whether the answer was right.
+- **Security.** We mostly ignored it, and level 2 admitted that the sandbox is basically decorative. Real agents need real isolation (containers, limited permissions, no access to secrets they don't need), protection against prompt injection from files and web pages the agent reads, and limits on what any single action can do. An agent with a shell is a security problem first and a productivity tool second.
+- **Much bigger evals.** Six tasks with 2 or 3 runs each is a demo. Real eval sets have hundreds of tasks, many of them collected from real failures, with enough runs to say something statistically. They also evaluate the whole path an agent took (did it take a sensible route, not just did it end up right), run in CI on every change, and track cost and speed alongside quality.
+- **Evals in production.** Everything here runs offline, on tasks you wrote. Once real people use an agent, you also need monitoring, logging and tracing, a way to collect failures and turn them into new eval tasks, and human review of a sample of real outputs. The level 4 calibration habit never really ends.
+- **Cost and speed.** We looked at token counts, but didn't optimize them. In practice there's a lot to do: caching, batching, using a smaller model for easy steps, and deciding how much thinking each step actually needs.
+
+None of this changes the core idea, though. Every one of those is either something inside the loop, something in the box around it, or a way of measuring whether the box is any good. That's still the map.
+
 ## Close the loop
 
 Pull up `level0_watch/README.md` one last time. Everything in this repo fits in that one diagram, plus a box around it. Claude Code is that box with a lot of good engineering inside, and evals are how you find out whether your box is any good.
