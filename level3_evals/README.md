@@ -2,6 +2,14 @@
 
 **Goal:** run the agent on the same tasks several times, grade each run with code, see a number that isn't 100%.
 
+## Why this level
+
+Up to now you've judged the agent by watching it. That doesn't scale, and it can mislead you. An agent that works the one time you watch might fail one time in four. **Evals** replace "I watched it and it looked fine" with a number you can track. This level is the easy kind: tasks that have a checkable right answer, graded by code.
+
+**What to expect.** Nine agent runs one after another, with nothing for you to do while they run (`--quiet` hides the transcripts). Then a table with one row per task: how many runs passed, a 95% confidence interval, and average turns, tokens, cost and seconds. On tasks this small, the agent often passes everything. That's still a real result. 3 out of 3 comes with an interval of roughly 44% to 100%, and an eval set where everything passes isn't telling you much. Spend more of your attention on the `check.py` files than on the score.
+
+**Why it matters.** Writing the check is where you decide what "correct" means, and it's easy to get wrong. `fix_failing_test` shows the classic trap: "the tests pass" isn't enough if the agent got there by editing the test.
+
 ## What this is
 
 Three tasks in `tasks/`. Each has a `prompt.txt` (what the agent is told) and a `check.py` (a function that looks at the workspace afterwards and returns pass or fail with a reason). `run_evals.py` resets the workspace, runs the agent, runs the check, and does that N times per task because the agent won't do the same thing twice.

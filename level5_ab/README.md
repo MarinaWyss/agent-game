@@ -2,6 +2,14 @@
 
 **Goal:** the loop engineers should be in. Edit the harness, re-run the evals, read the diff.
 
+## Why this level
+
+Everything so far has been building toward the question you'll actually ask most days: I changed something, is it better? Without evals, people try a prompt tweak on one example and go with their gut. Here you change one line of the system prompt and re-run every eval from levels 3 and 4 against both versions, side by side.
+
+**What to expect.** You copy `SYSTEM.md`, add one line, and start the run. This is the longest run in the repo: 24 agent runs plus the judge calls, with nothing to do until it finishes. At the end you get one table: each task with A's and B's pass counts, tokens, and turns. With only 2 runs per task, most differences will be noise. In testing, B dropped one criterion on one task and used more tokens on another, and neither meant anything at that sample size. The goal isn't to crown a winner. It's to get used to the workflow, and to see for yourself how little a small sample tells you.
+
+**Why it matters.** Edit, re-run the evals, read the difference: that's how you improve an agent without fooling yourself. The same loop answers "is the new model better for my task?" Change the model instead of the prompt and run it again.
+
 ## What this is
 
 `run_all.py` runs the level 3 tasks and the level 4 tasks against two system prompts and prints the columns side by side. The loop, tools, turn cap and judge are identical between A and B. Only the words in the system prompt change.

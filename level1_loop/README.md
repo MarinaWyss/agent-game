@@ -2,6 +2,16 @@
 
 **Goal:** a working coding agent in ~70 lines.
 
+## Why this level
+
+Level 0 showed the loop from the outside. You saw requests and results go by, but Claude Code's own code stayed hidden. Here you write the loop yourself, so nothing about it is hidden.
+
+What surprises most people is how little there is. It's one API call inside a `while` loop, a check for whether the model asked for a tool, a function that runs the tool, and a list of messages that grows every turn. There's no planner, no memory store, and no special "agent" API. The model is the same one you'd chat with; the loop is what turns it into an agent.
+
+**What to expect.** Claude Code fills in about 30 lines of the TODO. Then you run your agent on the same task as level 0, and it fixes the same bug in about five turns. Its output is plainer than Claude Code's: it prints `->` for each request and `<-` for each result. Those are the same request/result pairs as the `⏺` lines in level 0, with nothing on top. It's also rough on purpose. There's no turn limit, no permission check, and every shell command just runs. That isn't something to fix here; it's what level 2 is about.
+
+**Why it matters.** Once you've written the loop, any agent product is easier to read. You can ask the same three questions of each one: what tools does it have, what does it do with the results, and when does it stop?
+
 ## What this is
 
 `agent.py` has three tools defined and a function that runs them. The loop is a TODO with the steps spelled out in comments. You hand the TODO to Claude Code, it fills it in, you run it on the same task from level 0 and compare transcripts.
