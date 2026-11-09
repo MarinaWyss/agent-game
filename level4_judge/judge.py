@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import anthropic  # noqa: E402
 
-from harness import JUDGE_MODEL, REPO, WORKSPACE  # noqa: E402
+from harness import JUDGE_MODEL, PRISTINE, REPO, WORKSPACE  # noqa: E402
 from harness.agent import run_agent  # noqa: E402
 from harness.tools import always_allow  # noqa: E402
 from harness.workspace import reset_workspace  # noqa: E402
@@ -43,8 +43,27 @@ def load_tasks() -> list[dict]:
             "prompt": (d / "prompt.txt").read_text().strip(),
             "output": meta["output"],
             "criteria": load_rubric(d / "rubric.md"),
+            "context": build_context(meta.get("context_files", [])),
         })
     return tasks
+
+
+def build_context(files: list[str]) -> str:
+    """The project as the agent found it, for criteria the judge can't check from the output alone.
+
+    A judge only knows what's in its prompt. "Doesn't invent files" can't be graded without
+    seeing which files exist, so tasks that need it list files to include in task.json.
+    """
+    if not files:
+        return ""
+    listing = ", ".join(sorted(p.name for p in PRISTINE.iterdir() if p.is_file()))
+    parts = ["## The project the agent was working in",
+             "This is the project as it was before the agent started. Use it to check what the "
+             "output claims about the project.",
+             f"Files in the project: {listing}"]
+    for name in files:
+        parts.append(f"### {name}\n```\n{(PRISTINE / name).read_text().rstrip()}\n```")
+    return "\n\n".join(parts) + "\n\n"
 
 
 def load_rubric(path: Path) -> list[str]:
@@ -131,6 +150,8 @@ NUMERIC_INSTRUCTIONS = (
 def build_judge_prompt(task: dict, judged: list[tuple[int, str]], output: str, numeric: bool) -> str:
     rubric = "\n".join(f"- {c}" for _, c in judged)
     prompt = JUDGE_PROMPT.replace("{task}", task["prompt"]).replace("{rubric}", rubric).replace("{output}", output)
+    if task.get("context"):
+        prompt = prompt.replace("## Agent output to grade", task["context"] + "## Agent output to grade", 1)
     if numeric:
         # swap the pass/fail instructions (from "Reply with JSON" to "in the order given.") for a 1-10 score
         prompt = re.sub(r"Reply with JSON only.*?in the order given\.", NUMERIC_INSTRUCTIONS, prompt, flags=re.S)
@@ -263,7 +284,7 @@ Task: {task}
 Rubric:
 {rubric}
 
-Output A:
+{context}Output A:
 <a>
 {a}
 </a>
@@ -294,8 +315,8 @@ def cmd_pairwise(args) -> None:
         rubric = "\n".join(f"- {c}" for c in task["criteria"])
         a, b = outs[0]["output"], outs[1]["output"]
 
-        ab = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, a=a, b=b))
-        ba = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, a=b, b=a))
+        ab = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, context=task["context"], a=a, b=b))
+        ba = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, context=task["context"], a=b, b=a))
         # In the second call, "A" is really run 2. Translate back to run numbers.
         first = _winner(ab, swapped=False)
         second = _winner(ba, swapped=True)

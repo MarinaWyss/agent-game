@@ -8,9 +8,9 @@ Most of what agents produce can't be checked with an `assert`: a commit message,
 
 This level shows the middle path. Write down what good means as pass/fail criteria, let a second model apply them, and then check that model against humans before you rely on it.
 
-**What to expect.** Most of the real work is the first step: adding your own criterion to each of the three rubrics. After that, the agent writes six texts and the judge grades each one twice. With tight pass/fail criteria, the judge usually agrees with itself.
+**What to expect.** Most of the real work is the first step: adding your own criterion to each of the three rubrics. After that, the agent writes six texts and the judge grades each one twice. With tight pass/fail criteria, the judge mostly agrees with itself. When it doesn't, it's usually on the vaguest criterion, and that's a useful thing to find out.
 
-Then come two demos of what goes wrong without that structure. Asked for a 1-to-10 score instead, the judge will often give the same text different scores in the two rounds (8 one time, 7 the next). Asked which of two outputs is better, it gets asked in both orders, because judges can favor whichever one they saw first. Sometimes that shows up and sometimes it doesn't.
+Then come two demos of what goes wrong without that structure. Asked for a 1-to-10 score instead, the judge will often give the same text different scores in the two rounds (in one test run, a 4 and then a 6 for the same explanation). Asked which of two outputs is better, it gets asked in both orders, because judges can favor whichever one they saw first. That bias only shows up sometimes, and on these tasks it often doesn't.
 
 Finally, you grade the same outputs by hand, and a table shows you where you and the judge agree.
 
@@ -40,6 +40,8 @@ It's not an agent. There's no loop and no tools here. `judge.py` sends one reque
 2. **The rubric** (the criteria from `rubric.md`).
 3. **The agent's output** (its final reply, or the file it wrote).
 
+For `write_readme` there's a fourth thing: **the project itself**, meaning the list of files plus the contents of `utils.py` and `test_utils.py`. Without it, the judge has no way to check whether the README made anything up. (There's more on why in the questions at the end.)
+
 The prompt tells the judge to grade each criterion as pass or fail, to be "strict and literal," and to reply with JSON only, shaped like this:
 
 ```
@@ -60,7 +62,7 @@ The judge is a different, cheaper model from the agent: `JUDGE_MODEL` in `harnes
 
 - **`commit_message`.** The agent is told: _"The test suite has one failing test. Fix it, then reply with ONLY a git commit message for the change (subject line, blank line, body). Nothing else in your final reply."_ So it fixes the same `slugify` bug from the earlier levels, and what gets graded is its final reply: the commit message itself. The rubric already checks for a short, imperative subject line ("Fix ...", not "Fixed ..."), a body that explains _why_ the change was needed and not just what changed, and no extra chatter around the message.
 - **`explain_trace`.** The workspace has a `trace.txt` with a short Python stack trace: a checkout request crashed with `KeyError: 'shipping_address'` because the `user` dictionary had no shipping address when `build_order` ran, on line 58 of `orders.py`. (Those files don't exist in the workspace. The agent only gets the trace, like you would from an error alert.) The agent is told to explain to a junior engineer who's been on the team for two weeks what went wrong and what to look at first, in under 150 words, without changing any files. Its final reply gets graded. The rubric already checks that it names the real cause, points to a concrete first place to look, pitches it at a junior engineer, and stays under 150 words.
-- **`write_readme`.** The agent is told: _"Write a README.md for this project. Someone who has never seen the code should understand what it does and how to run the tests."_ This time what gets graded is the `README.md` file it writes, not its reply. The rubric already checks that the first few lines say what the module is for, that it gives the exact command to run the tests, and that it doesn't make up features or files.
+- **`write_readme`.** The agent is told: _"Write a README.md for this project. Someone who has never seen the code should understand what it does and how to run the tests."_ This time what gets graded is the `README.md` file it writes, not its reply. The rubric already checks that the first few lines say what the module is for, that it gives the exact command to run the tests, and that it doesn't make up features or files. One thing to know: the `slugify` bug is still there during this task (nobody asked the agent to fix it), so the README it writes will often mention a failing test or a "known issue."
 
 **First, fill in the rubrics.** Open each `tasks/*/rubric.md`. Each one has three or four criteria already written and one `TODO` line. Decide what _you_ would want from a good commit message (or README, or explanation), and write it in. It takes a couple of minutes, and it's the most important part of the level.
 
@@ -95,6 +97,60 @@ python level4_judge/calibrate.py grade --name <second grader>   # optional
 python level4_judge/calibrate.py compare
 ```
 
+## Reading the output
+
+**`grade --twice`** prints every criterion with both rounds of grading underneath:
+
+```
+  [PASS] Correctly identifies the cause: the user dict has no "shipping_address" key ...
+         pass: The output states that line 58 does `user["shipping_address"]` ...
+         pass: The output states that build_order runs user["shipping_address"] ...
+  [SPLIT] Pitched at a junior engineer: no unexplained jargon, ...   <-- judge disagreed with itself
+         pass: The language is plain and not condescending, though terms like "call chain," "500," ...
+         fail: The output uses unexplained jargon such as 'a 500' (HTTP status), 'call chain', ...
+  [FAIL] max words 150  [checked by code]
+         fail: 152 words (checked by code)
+```
+
+- **`[PASS]` / `[FAIL]`** means both rounds agreed. **`[SPLIT]`** means they didn't.
+- **Look at _which_ criterion splits.** In this run it was "pitched at a junior engineer," in both explanations, and never any of the clear-cut ones. The two rounds noticed the same words ("call chain," "a 500," `.get()`) and just disagreed about whether they count as jargon. That's not really the judge being flaky. It's the criterion being vague. If you replaced it with something like "explains any term a junior engineer might not know, such as HTTP status codes," it would likely stop splitting.
+- **`[checked by code]`** lines never went to the judge. That's why both rounds always match.
+
+At the end there's a table:
+
+```
+task                criteria passed
+------------------------------------
+explain_trace r1         4/4
+explain_trace r2         2/4
+...
+overall                 18/20      (90%)
+```
+
+The table only counts the **first round**. So a `[SPLIT]` criterion counts as a pass or a fail depending on what round 1 happened to say. In this run, both explanations split on the junior-engineer criterion, but round 1 passed it for the first one and failed it for the second. That's part of why one scored `4/4` and the other `2/4` (the second one also went over the word limit). The second round exists to show you the wobble, not to change the score.
+
+**`grade --numeric --twice`** prints one score per round:
+
+```
+  scores: [4, 6]   <-- drifted
+    ... runs about 157 words, over the 150-word limit.
+```
+
+Two things to notice here. First, the same text got a 4 and a 6, and nothing in the score tells you why. Second, the judge guessed the word count, and got it wrong: code counted 152. In numeric mode, the judge still sees the "under 150 words" in the task, so it tries to count, and that's exactly why the regular `grade` hands counting to code.
+
+You may also see a text that passes every criterion in `grade` but only scores a 5 or 6 here. The score is picking up on something no criterion covers (in one run, a README whose example contradicted its own "known issue" note). That's a hint you might be missing a criterion. It's not a reason to switch to scores, since a score can't tell you _what_ it didn't like.
+
+**`pairwise`** prints both orders for each task:
+
+```
+explain_trace
+  order (1,2): prefers run 1  Output A names the cause ... whereas Output B runs about 150 words ...
+  order (2,1): prefers run 1  ... Output A likely exceeds the 150-word limit, while Output B stays under it.
+  consistent
+```
+
+The `prefers run N` part is already translated back to run numbers. The reasons aren't, though. In the `(2,1)` line, "Output A" is run 2, because that's the one the judge saw first. So the two reasons above actually agree with each other. If you see `FLIPPED`, the judge preferred whichever output came first (or second) both times, which is position bias. Getting `0 of 3 comparisons flipped` is a normal result too.
+
 ## What to notice
 
 - **Writing the rubric _is_ the eval.** "Subjective" tasks are mostly objective criteria nobody has written down yet. Once you write "subject line under 72 characters, imperative mood, body says why," there's very little subjectivity left. The model only applies the rubric. Deciding what good means is a human job, and it stays one.
@@ -127,6 +183,13 @@ Ask a judge "which is better, A or B?" and it can lean toward one position no ma
 
 **Any other judge biases I should know about?**
 Verbosity (longer looks better), confidence (sounding sure looks correct), and leniency (the really-nice-teacher problem). None of these go away completely. You measure them and correct for them.
+
+**Why does the judge get to see the project files for `write_readme`?**
+Because a judge only knows what's in its prompt. One of the `write_readme` criteria is "does not invent features, options, or files that don't exist in the project." Originally, the judge only got the README, so it had no idea which files existed. In test runs, it passed that criterion every single time while saying things like "I cannot verify the referenced files." Once it even pointed out that the README contradicted itself, and passed it anyway.
+
+A check that can't fail is worse than no check, so now `task.json` for `write_readme` has a `context_files` list. `judge.py` adds those files, plus a list of everything in the project, to the judge's prompt. With that, a README that mentions a made-up `config.yaml` or a `--strict` flag fails with a reason naming both.
+
+The general lesson: before you hand a criterion to a judge, ask what it would need to see to grade it. If the answer isn't in the prompt, either add it or move that criterion to a code check.
 
 **What do `judge error`, `n/a`, or "no verdict" mean in the output?**
 The judge didn't return a usable answer for that one (usually malformed JSON). The script tries to recover what it can, and if it can't, it says so and leaves that comparison out of the totals instead of guessing.
