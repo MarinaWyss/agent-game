@@ -6,9 +6,30 @@
 
 Up to now you've judged the agent by watching it. That doesn't scale, and it can fool you. An agent that works the one time you watch might fail one time in four. **Evals** replace "I watched it and it looked fine" with a number you can track. This level is the easy kind: tasks with a checkable right answer, graded by code.
 
-**What to expect.** Nine agent runs back to back, with nothing for you to do while they run (`--quiet` hides the transcripts). Then a table with one row per task: how many runs passed, a 95% confidence interval, and the average turns, tokens, cost, and seconds.
+**What to expect.** The command runs 3 tasks, 3 times each, so that's 9 agent runs in a row. Before every run, the workspace gets reset, so each one starts from the same broken toy project. The agent runs on its own (no permission prompts), and `--quiet` hides its transcript, so all you'll see while it works is one line per run saying PASS or FAIL, and why.
 
-On tasks this small, the agent often passes everything. That's still a real result! But 3 out of 3 comes with an interval of roughly 44% to 100%, and an eval set where everything passes isn't telling you much. So I'd spend more of your attention on the `check.py` files than on the score.
+When it's done, you get a table. Here's a real one from a shorter run (`--n 1`, so just one run per task):
+
+```
+task                    pass       95% CI  avg turns  avg tokens  avg cost  avg sec
+------------------------------------------------------------------------------------
+add_parse_date         1/1      21-100%        6.0      15,303    $0.030       20
+fix_failing_test       1/1      21-100%        5.0       8,810    $0.011       10
+log_line_count         1/1      21-100%        6.0       8,761    $0.013        8
+------------------------------------------------------------------------------------
+overall                3/3      44-100%   (100% observed; the interval is how sure you can be of that)
+```
+
+Reading it left to right:
+
+- **`pass`** is how many runs passed, out of how many were tried.
+- **`95% CI`** is the range the agent's real pass rate probably falls in, given how few runs you did. (More on this in a second.)
+- **`avg turns`, `avg tokens`, `avg cost`, `avg sec`** are how much work each run took, on average.
+- **`overall`** combines all the tasks.
+
+Don't be surprised if every run passes. These tasks are small, and the agent usually handles them fine. The column to look at is the confidence interval. 3 out of 3 _sounds_ like 100%, but three runs is so few that a much worse agent could get lucky. An agent that only succeeds half the time still gets 3 out of 3 about one time in eight. That's why the interval for 3 out of 3 goes all the way down to 44%. A perfect score on a few runs tells you the agent _can_ do the task, not how reliably it does it.
+
+So the score isn't the most useful part of this level. The `check.py` files are, because that's where you decide what "passed" actually means.
 
 **Why it matters.** Writing the check is where you decide what "correct" means, and it's easy to get wrong. `fix_failing_test` shows the classic trap: "the tests pass" isn't enough if the agent got there by editing the test.
 
