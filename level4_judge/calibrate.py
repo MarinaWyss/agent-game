@@ -9,8 +9,12 @@ them to each other and to the judge.
 
 grade shows you each output and asks p/f per criterion. No API needed.
 compare reads results/human-*.json and results/grades-<label>.json.
+
+Human grades only make sense against the exact outputs and rubric they were given, so
+each human file records both, and compare leaves out any file that no longer matches.
 """
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -18,6 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from judge import RESULTS_DIR, describe, load_tasks, outputs_path  # noqa: E402
+
+
+def outputs_fingerprint(label: str) -> str:
+    """Short hash of the outputs file, so grades can be matched to the outputs they graded."""
+    return hashlib.sha256(outputs_path(label).read_bytes()).hexdigest()[:12]
 
 
 def cmd_grade(args) -> None:
@@ -40,25 +49,49 @@ def cmd_grade(args) -> None:
         verdicts.append({"task": o["task"], "run": o["run"], "passes": marks})
     RESULTS_DIR.mkdir(exist_ok=True)
     path = RESULTS_DIR / f"human-{args.name}.json"
-    path.write_text(json.dumps({"name": args.name, "label": args.label, "verdicts": verdicts}, indent=2))
+    path.write_text(json.dumps({
+        "name": args.name,
+        "label": args.label,
+        "outputs_fingerprint": outputs_fingerprint(args.label),
+        "criteria": {name: t["criteria"] for name, t in tasks.items()},
+        "verdicts": verdicts,
+    }, indent=2))
     print(f"\nsaved to {path}")
 
 
 def cmd_compare(args) -> None:
     tasks = {t["name"]: t for t in load_tasks()}
+    current = outputs_fingerprint(args.label)
+    current_criteria = {name: t["criteria"] for name, t in tasks.items()}
     humans = {}
     for p in sorted(RESULTS_DIR.glob("human-*.json")):
         d = json.loads(p.read_text())
+        if d.get("label") != args.label:
+            continue
+        if d.get("outputs_fingerprint") != current:
+            print(f"skipping {d['name']}: they graded an older set of outputs. "
+                  f"Re-run: calibrate.py grade --name {d['name']}")
+            continue
+        if d.get("criteria") != current_criteria:
+            print(f"skipping {d['name']}: the rubric changed since they graded. "
+                  f"Re-run: calibrate.py grade --name {d['name']}")
+            continue
         humans[d["name"]] = {(v["task"], v["run"]): v["passes"] for v in d["verdicts"]}
     if not humans:
-        sys.exit("no human grades yet; run: calibrate.py grade --name <you>")
+        sys.exit("no up-to-date human grades yet; run: calibrate.py grade --name <you>")
 
     judge = {}
     jpath = RESULTS_DIR / f"grades-{args.label}.json"
-    if jpath.exists():
+    if jpath.exists() and jpath.stat().st_mtime < outputs_path(args.label).stat().st_mtime:
+        print("skipping the judge: its grades are older than the outputs. Re-run: judge.py grade")
+    elif jpath.exists():
         for g in json.loads(jpath.read_text()):
             first = g["grades"][0].get("grades") or []
             judge[(g["task"], g["run"])] = [x.get("pass") for x in first]
+        stale = [t for (t, _), marks in judge.items() if marks and len(marks) != len(current_criteria[t])]
+        if stale:
+            print("skipping the judge: the rubric changed since it graded. Re-run: judge.py grade")
+            judge = {}
     graders = dict(humans)
     if judge:
         graders["judge"] = judge

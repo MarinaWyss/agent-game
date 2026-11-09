@@ -89,13 +89,7 @@ python level4_judge/judge.py pairwise
 
 This shows the judge both outputs for each task and asks which is better, then swaps the order and asks again. If the answer flips, that's position bias.
 
-**Then calibrate.** Grade the same outputs by hand. If you can get a second person to grade too, I'd recommend it. Do it on separate screens and don't compare notes:
-
-```
-python level4_judge/calibrate.py grade --name <your name>
-python level4_judge/calibrate.py grade --name <second grader>   # optional
-python level4_judge/calibrate.py compare
-```
+Once you've read through all of that (the next section walks through it), the last step is calibration. It gets its own section after that, because it's the most important part of the level.
 
 ## Reading the output
 
@@ -151,13 +145,104 @@ explain_trace
 
 The `prefers run N` part is already translated back to run numbers. The reasons aren't, though. In the `(2,1)` line, "Output A" is run 2, because that's the one the judge saw first. So the two reasons above actually agree with each other. If you see `FLIPPED`, the judge preferred whichever output came first (or second) both times, which is position bias. Getting `0 of 3 comparisons flipped` is a normal result too.
 
+## Calibrate: check the rubric against real readers
+
+**Instructions that seem easy to check are often confusing.** This is the part engineers tend to skip, and it's the part that matters most.
+
+When you wrote "pitched at a junior engineer: no unexplained jargon," it probably felt clear. You knew what you meant. But the judge just split on that exact criterion: same output, same words, two different verdicts. And it wasn't being random. Both rounds pointed at the same terms ("call chain," "a 500," `.get()`) and disagreed about whether they count as jargon. Another person reading your rubric could easily do the same thing.
+
+Calibration is how you find that out on purpose, instead of discovering it later when your eval numbers stop making sense. You grade the same outputs the judge graded, using only the rubric's words. Then you line up everyone's answers and look at where they differ. Every disagreement points at a sentence somebody read differently than you meant it.
+
+### Step 1: grade the outputs yourself
+
+```
+python level4_judge/calibrate.py grade --name <your name>
+```
+
+This shows you each of the six outputs, one at a time: the task the agent was given, the agent's output, and then each criterion from the rubric. For every criterion, type `p` for pass or `f` for fail. It doesn't call the API at all. Your answers are saved to `results/human-<your name>.json`.
+
+A few things that make this work better:
+
+- **Grade what the rubric says, not what you meant.** If a criterion is vague enough that you're unsure, notice that. It's a finding, not a mistake on your part.
+- **Don't look at the judge's grades first.** Scroll past them or close that terminal. Once you've seen its answer, it's very hard not to anchor on it.
+- **You'll be asked about the `[checked by code]` criteria too.** Count if you want to, or just answer honestly. It's a nice check that the code and you agree on what "150 words" means.
+
+### Step 2: get a second reader
+
+```
+python level4_judge/calibrate.py grade --name <second grader>
+```
+
+This step is optional, but I'd really recommend it. The best second grader is someone who _didn't_ write the rubric, because all they have is the words. You, on the other hand, also have everything you meant and didn't write down. Have them grade on their own screen, and don't compare notes until both of you are done.
+
+If there's nobody around, you can get a second opinion from a different model instead. Re-run the judge with a different `JUDGE_MODEL`, then compare again, and the `judge` column will show how that model read your rubric:
+
+```
+JUDGE_MODEL=claude-sonnet-5-5 python level4_judge/judge.py grade
+```
+
+(That overwrites the previous judge grades, so re-run plain `judge.py grade` afterwards if you want the default judge back.)
+
+### Step 3: compare
+
+```
+python level4_judge/calibrate.py compare
+```
+
+You get one row per criterion per output, with a column for every grader, including the judge. Here's what it looks like from a test run with two graders (trimmed):
+
+```
+task / criterion                                              tester1  tester2    judge
+-----------------------------------------------------------------------------------------
+commit_message r1: Body explains WHY the change was needed (     pass     pass     pass
+explain_trace r1: Pitched at a junior engineer: no unexplain     pass     fail     fail  <--
+explain_trace r2: max words 150  [checked by code]               pass     pass     fail  <--
+write_readme r1: Does not invent features, options, or files     pass     fail     pass  <--
+...
+
+agreement (share of criteria where both graders gave the same verdict):
+  tester1 vs tester2: 16/20 (80%)
+  tester1 vs judge: 18/20 (90%)
+  tester2 vs judge: 16/20 (80%)
+```
+
+- **`<--`** marks every row where the graders didn't all agree. Those rows are the whole point. Skim past the rest.
+- **The agreement lines** tell you how often each pair of graders matched, across every criterion. They're a useful summary, but the individual `<--` rows tell you what to actually fix.
+- **The `judge` column** uses the first round from your last `judge.py grade` run, the same as the pass-rate table.
+
+If you change the outputs (by running `generate` again) or edit a rubric, everyone's old grades no longer line up with what's in front of them. `compare` checks for that, skips anyone whose grades are out of date, and tells you who needs to re-grade.
+
+### Step 4: decide what each disagreement means
+
+Every `<--` row falls into one of a few patterns:
+
+| what you see | what it probably means | what to do |
+|---|---|---|
+| the humans disagree with each other | the criterion is ambiguous | rewrite it until two people would read it the same way |
+| the humans agree, the judge doesn't | the judge is misreading it | make the criterion more explicit, add an example, tighten `JUDGE_PROMPT.md`, or try a stronger judge model |
+| everyone disagrees with the `[checked by code]` result | your code check measures something different than people expect | fix the check, or rename it so it says what it really measures |
+| everyone agrees | the criterion works | you can trust the judge on this one |
+
+Most of the time, the fix is rewriting the criterion. A few moves that tend to help:
+
+- **Name the specifics.** Instead of "no unexplained jargon," try "explains any term a two-week junior might not know (for example HTTP status codes or `.get()`), or avoids using it."
+- **Split it.** "No unexplained jargon, no condescension, assumes they know Python basics" is really three criteria. If people disagree on one, you can't tell which part.
+- **Make it observable.** "Is clear" is a feeling. "Names the file and line number to look at first" is something two people can check the same way.
+- **Add an example of a pass and a fail** right in the rubric line, if the boundary is subtle.
+
+### Step 5: do it again
+
+After you change a criterion, re-run `judge.py grade --twice` and grade by hand again. You're done when the people agree with each other and the judge agrees with the people, on every criterion you plan to let the judge handle alone.
+
+And it's not a one-time thing. New outputs bring new edge cases nobody thought of when the rubric was written. Every time you change the rubric, the agent, or the judge model, it's worth re-checking a sample by hand. A judge you calibrated once, six months ago, against outputs that no longer look like today's, isn't really calibrated anymore.
+
 ## What to notice
 
 - **Writing the rubric _is_ the eval.** "Subjective" tasks are mostly objective criteria nobody has written down yet. Once you write "subject line under 72 characters, imperative mood, body says why," there's very little subjectivity left. The model only applies the rubric. Deciding what good means is a human job, and it stays one.
 - **Pass/fail per criterion beats a score.** A 7/10 doesn't mean much, and it moves between runs. "Fails criterion 2: the body doesn't explain why" is something you can act on, and you'll get the same answer next time. The `--numeric` demo shows you this.
 - **If you can count it, let code count it.** The `explain_trace` rubric has `max_words: 150`, which `judge.py` checks in Python and labels `[checked by code]`. Models are bad at counting. A word limit, a line count, "contains a code block," "is valid JSON": all of that belongs in code. Most real rubrics are a mix of code checks and judgment calls, and the judge only sees the judgment calls. (If you want to watch the judge guess, change that line to "Under 150 words" and run `grade --twice`.)
 - **The judge is a model, so it has model problems.** Position bias, verbosity bias (longer looks better), and self-preference (a model likes its own style). What helps: pass/fail against a rubric instead of head-to-head comparisons, checking both orders if you do compare, and using a different model as the judge than the one being graded. (`JUDGE_MODEL` and `AGENT_MODEL` in `harness/__init__.py` are different for exactly this reason.)
-- **Calibration is how you earn the right to automate.** Look at the `compare` table. Where two humans disagree, the rubric is ambiguous, so fix the wording. Where the humans agree and the judge doesn't, fix the judge prompt. Where everyone agrees, you can let the judge handle that criterion on its own. If you skip this step, you end up with a judge you can't really trust.
+- **Calibration is how you earn the right to automate.** Without it, you're trusting that everyone reads your rubric the way you meant it, and the judge has already shown you they don't. The section above walks through how to check.
 - **`JUDGE_PROMPT.md` is worth reading.** It says "be strict and literal" and "do not reward effort or length." Those lines are there because without them, the judge grades like a really nice teacher.
 
 ## If the judge agrees with itself every time
