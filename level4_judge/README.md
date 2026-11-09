@@ -30,6 +30,30 @@ flowchart LR
     H --> C
 ```
 
+## What's an LLM judge?
+
+An **LLM judge** is just another call to a model, with a different job. Instead of asking it to do the task, you show it someone else's attempt and ask it to grade it.
+
+It's not an agent. There's no loop and no tools here. `judge.py` sends one request and gets one answer back. The request is built from `JUDGE_PROMPT.md`, with three things filled in:
+
+1. **The task** the agent was given (from `prompt.txt`).
+2. **The rubric** (the criteria from `rubric.md`).
+3. **The agent's output** (its final reply, or the file it wrote).
+
+The prompt tells the judge to grade each criterion as pass or fail, to be "strict and literal," and to reply with JSON only, shaped like this:
+
+```
+{"grades": [{"criterion": "Body explains WHY the change was needed ...", "pass": true, "reason": "The body says the test expects lowercase slugs."}, ...]}
+```
+
+`judge.py` reads that JSON and prints one line per criterion: PASS or FAIL, plus the judge's one-sentence reason. Criteria that are really measurements, like `max_words: 150`, never go to the judge at all. Code checks those (more on why in "What to notice").
+
+The judge is a different, cheaper model from the agent: `JUDGE_MODEL` in `harness/__init__.py`, which defaults to Haiku. There's a reason it's not the same model, and it's in the questions at the end.
+
+**Why use one?** Because nobody wants to read every output by hand every time they change something. A judge can grade hundreds of outputs in minutes, it doesn't get tired or bored, and it applies the same written criteria every time.
+
+**Why not trust it blindly?** Because it's a model, so it has model problems. It can be inconsistent, it can be swayed by length or confident wording, and it can misread a criterion you thought was clear. That's what the rest of this level is about: making the judge's job as narrow as possible, measuring how much it wobbles, and checking it against humans before you rely on it.
+
 ## Type this
 
 **The three tasks.** Before you can say what a good answer looks like, you need to know the question. Each task is a folder in `tasks/` with a `prompt.txt` (exactly what the agent is told), a `task.json` (which part of the run gets graded), and a `rubric.md` (what counts as good). All three run on the same toy project as before.
