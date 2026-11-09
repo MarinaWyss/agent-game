@@ -46,6 +46,60 @@ python level5_ab/run_all.py --n 2
 
 That's 2 runs x 6 tasks x 2 versions = 24 agent runs, plus 12 judge calls. If you want it faster, `--skip-level4` cuts it in half.
 
+## Reading the output
+
+While it runs, you'll mostly see progress headers like `######## variant B: level 4 ########`. It runs everything for A first (level 3, then level 4), then everything for B. The table only shows up at the very end. Here's a real one, from a run with `--n 2`:
+
+```
+                         A pass   B pass    A tokens  B tokens   A turns B turns
+----------------------------------------------------------------------------------
+add_parse_date            2/2      2/2        11,955    10,970       5.0     4.5
+fix_failing_test          2/2      2/2         7,727     8,707       4.5     5.0
+log_line_count            2/2      2/2         8,663     8,714       6.0     6.0
+----------------------------------------------------------------------------------
+commit_message (judge)    6/6      6/6         6,637     9,284       4.0     5.0
+explain_trace (judge)     7/8      8/8         1,988     1,982       2.0     2.0
+write_readme (judge)      6/6      5/6        13,024    14,196       5.0     5.5
+
+saved to level5_ab/last_run.json
+```
+
+**A is `SYSTEM.md`, your original. B is `SYSTEM_v2.md`, the one with your extra line.** Every row ran both versions on the same task, the same number of times.
+
+The table has two halves, and the pass columns mean different things in each:
+
+- **The top three rows are the level 3 tasks.** `2/2` means both runs passed the code check. It's out of 2 because you ran `--n 2`.
+- **The bottom three rows, marked `(judge)`, are the level 4 tasks.** Here the pass column counts _criteria_, not runs: the number of criteria the judge passed, out of criteria times runs. `commit_message` has 3 criteria and ran twice, so it's out of 6. `explain_trace` has 4 criteria (one is the word count, checked by code), so it's out of 8. The judge grades each output once here, not twice.
+
+The other columns are averages per run, for the agent doing the task:
+
+- **Tokens** is everything the agent sent and received in one run, on average, including input read from the cache and the model's thinking. For the `(judge)` rows, it's the agent's tokens for writing the text, not the judge's tokens for grading it.
+- **Turns** is how many trips around the loop the agent took, on average. A `.5` just means the two runs took different numbers of turns (say, 4 and 5).
+
+### So what does this run say?
+
+Honestly: no real difference. Here's how to read it:
+
+1. **Start with the pass columns.** All three level 3 tasks are tied at `2/2`. On the level 4 side, B gained one criterion on `explain_trace` (`8/8` vs `7/8`) and lost one on `write_readme` (`5/6` vs `6/6`). That's one point up and one point down, which nets to zero. And with only 2 runs, a single criterion flipping is well within the noise. Remember that the judge itself can flip a borderline criterion between two gradings of the _same_ text (you saw that in level 4).
+2. **Then look at cost.** Most token counts are within about 10% of each other, which is also noise at this sample size. The one that stands out is `commit_message`: about 40% more tokens for B (9,284 vs 6,637) and one more turn on average. That's worth a look, because it's a cost difference even if quality didn't change. Depending on the line you added, that might make sense (an instruction like "run the tests before and after" literally adds steps). With 2 runs, though, it could also be one run that took a detour.
+3. **Then decide.** The honest conclusion from this table is "B isn't clearly better or worse, and it might cost a bit more on one task." If you cared about the difference, the next step would be more runs (`--n 5` or more), not a decision.
+
+That's not a disappointing result. It's the most common one, and it's exactly what a gut check on one example would have missed.
+
+### Digging into a difference
+
+The table tells you _where_ A and B differ, not _why_. To find out why:
+
+- **For the level 3 rows,** each variant's full results, with every transcript, are saved in `level3_evals/results/` as `*-ab-A.json` and `*-ab-B.json`. Open the B file and read what the agent did differently.
+- **For the `(judge)` rows,** `last_run.json` only keeps the totals. To see which criterion changed and the judge's reason, run level 4 by itself with the new prompt and a separate label:
+
+```
+python level4_judge/judge.py generate --n 2 --quiet --system harness/SYSTEM_v2.md --label v2
+python level4_judge/judge.py grade --twice --label v2
+```
+
+That gives you the same per-criterion breakdown you saw in level 4, for version B, without touching your original results.
+
 ## What to notice
 
 - **This is why you wrote the evals.** Without them, "I added a line and it seemed better" is the whole story. With them, you can say B passed 11 of 12 where A passed 9, used 20% more tokens, and got worse on the README task. You can't really argue with the table; you can only argue about what to measure.
