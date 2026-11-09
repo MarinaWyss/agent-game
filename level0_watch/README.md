@@ -37,7 +37,7 @@ source .venv/bin/activate
 python -m harness.workspace
 cd workspace
 pwd          # should end in /agent-game/workspace
-claude
+claude --verbose
 ```
 
 Activating the venv first means `pytest` is on the path for Claude Code's shell. Resetting the workspace puts the failing test back if you already fixed it earlier.
@@ -48,7 +48,7 @@ Then give it one task:
 Run the tests and fix whatever fails.
 ```
 
-Press **Ctrl+O** to open the transcript viewer so the full tool calls and results are visible instead of collapsed (or start it as `claude --verbose`). Claude Code will ask permission before it runs a shell command or edits a file. Say yes.
+`--verbose` shows the full tool calls and results instead of collapsing them. (Inside a session, **Ctrl+O** toggles the same transcript view.) Claude Code will ask permission before it runs a shell command or edits a file. Say yes.
 
 ## What you should see
 
