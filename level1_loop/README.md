@@ -87,6 +87,23 @@ There's no turn counter here either, so you can't see where one trip around the 
 
 ## Questions you might have
 
+**What prompt actually gets sent to the model?**
+Three things, all set in `agent.py`. First, the system prompt, which is one hard-coded line near the top:
+
+```python
+SYSTEM = "You are a coding agent in a small Python project. Use your tools to complete the task, then summarize what you did."
+```
+
+Second, your task, as the first user message. It's whatever you type after the script name, so `"Run the tests and fix whatever fails."` becomes the whole conversation at the start:
+
+```python
+messages = [{"role": "user", "content": task}]
+```
+
+Third, the tool definitions in `TOOLS`: `read_file`, `write_file`, and `run_shell`, each with a one-line description and its arguments. The model reads those descriptions too, so they're part of the prompt in practice.
+
+That's it. Every request after the first sends the same system prompt and tools, plus the conversation so far: your task, every reply from the model, and every tool result. What's _not_ in there is `workspace/CLAUDE.md` (which is why the agent only finds it through `ls`) or the longer `harness/SYSTEM.md` (that one shows up in level 2).
+
 **Why did it read `CLAUDE.md`, and then apologize for not following it?**
 Your agent doesn't load `CLAUDE.md` the way Claude Code does. Its whole system prompt is one sentence. So it ran the tests first with no project instructions at all, saw `CLAUDE.md` in the `ls` output, and decided to read it. By then it had already broken two of the rules (it ran `pytest` without `-q`, and it didn't explain its first few steps), so it followed them from then on and owned up at the end.
 
