@@ -108,6 +108,52 @@ Yes, and the table admits it. The `95% CI` column is a Wilson interval, and 3 ou
 
 As a rule of thumb from a standard two-proportion power calculation: to tell a 70% agent from a 90% one (80% power, p<0.05), you need about 60 runs per version. To detect a 5-point change, you need several hundred. The default is 3 so a run finishes quickly. The point of the column is to show you the uncertainty instead of hiding it behind a percentage.
 
+**How is the confidence interval calculated? Why 44% to 100%?**
+It's a **Wilson score interval**, a standard formula for putting a range around a pass rate. The code is the `wilson()` function in `run_evals.py`.
+
+The formula most people learn first is "pass rate plus or minus 1.96 standard errors." It breaks here: at 3 out of 3, the standard error comes out as zero, so you'd get "100% to 100%," which is exactly the false confidence you're trying to avoid. Wilson fixes that by pulling the estimate toward the middle when you don't have many runs.
+
+For 3 out of 3, with z = 1.96 (that's what makes it 95%):
+
+- center = (1 + 1.96²/6) / (1 + 1.96²/3) = 1.640 / 2.281 ≈ 0.72
+- half-width = 1.96 × √(1.96²/36) / 2.281 = 0.640 / 2.281 ≈ 0.28
+- interval = 0.72 − 0.28 = **0.44**, and 0.72 + 0.28 gets capped at **1.00**
+
+The same formula gives 21% to 100% for 1 out of 1, which is what you see on each task row in the example table above.
+
+The intuition: 44% is roughly the lowest true pass rate where getting 3 out of 3 is still believable. An agent that succeeds 44% of the time gets 3 out of 3 about one time in twelve. Much below that, a perfect streak gets rare enough to rule out. So three passes in a row can't tell a lucky coin flip apart from an agent that never fails.
+
+**What's the difference between an outcome check and a process check?**
+An **outcome check** looks at the end state: is the result right? A **process check** looks at how the agent got there: did it do anything you wouldn't accept along the way? Outcome checks usually look at the workspace. Process checks often read the transcript, which gets saved for every run in `results/*.json`.
+
+Here's what the tasks in this repo do:
+
+| task | outcome check | process check |
+|---|---|---|
+| `fix_failing_test` | `pytest` passes | `test_utils.py` is unchanged (it's hashed), so the agent didn't pass by editing the test |
+| `add_parse_date` | `parse_date` handles inputs the agent never saw, and the suite is green | none |
+| `log_line_count` | `error_count.txt` has the right number | none, and that's a gap: an agent that guessed "5" would pass |
+
+Some more outcome checks:
+
+- The tests pass, or a bug report no longer reproduces.
+- A file exists and contains the right value.
+- The output is valid JSON, or matches a schema.
+- An endpoint returns 200 with the expected body.
+- After a migration, row counts and key fields still match.
+
+And some more process checks:
+
+- It didn't touch test files, lock files, or anything outside the files the task is about.
+- It didn't run anything dangerous (`rm -rf`, `git push --force`, `DROP TABLE`).
+- It didn't read secrets like `.env` or credentials files.
+- It ran the tests before saying it was done, instead of just claiming success.
+- It actually read `app.log` before writing the count, instead of guessing.
+- It didn't add dependencies nobody asked for.
+- It stayed under a turn or token budget.
+
+Roughly: outcome checks catch wrong answers, and process checks catch right answers reached in a way you wouldn't accept. If you want to practice, adding a process check to `log_line_count` (look in the transcript for a `read_file` or `grep` of `app.log`) is a nice first task.
+
 **What if the grader itself is wrong?**
 A grader is code, and code has bugs. So test it. Run the check against the untouched workspace (it should fail), against a correct fix (it should pass), and against a known cheat (it should fail, with the right reason). All three checks in this repo were tested that way. A grader that can't fail is worse than no grader at all.
 
