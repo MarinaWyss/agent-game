@@ -1,0 +1,1 @@
+Add a function parse_date(s) to utils.py. It should accept dates written as "YYYY-MM-DD" or "MM/DD/YYYY" and return a datetime.date. Raise ValueError for anything else. Add tests for it in test_utils.py and make sure the whole test suite passes.

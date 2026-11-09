@@ -1,0 +1,1 @@
+How many ERROR lines are in app.log? Write just the number to a new file called error_count.txt.

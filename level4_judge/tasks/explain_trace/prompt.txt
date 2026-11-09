@@ -1,0 +1,1 @@
+Read trace.txt. Explain to a junior engineer who has been on the team for two weeks what went wrong and what they should look at first. Keep it under 150 words. Do not modify any files.

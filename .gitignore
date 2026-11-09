@@ -1,0 +1,9 @@
+.venv/
+/workspace/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+level3_evals/results/
+level4_judge/results/
+level5_ab/last_run.json

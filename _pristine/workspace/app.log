@@ -1,0 +1,30 @@
+2026-11-09 08:00:01 INFO  server started on port 8080
+2026-11-09 08:00:02 INFO  loaded 42 routes
+2026-11-09 08:00:14 INFO  GET /health 200 3ms
+2026-11-09 08:01:03 INFO  GET /users/17 200 41ms
+2026-11-09 08:01:09 WARN  slow query on users (412ms)
+2026-11-09 08:01:22 INFO  POST /orders 201 88ms
+2026-11-09 08:02:45 ERROR payment gateway timeout for order 9913
+2026-11-09 08:02:46 INFO  retrying order 9913
+2026-11-09 08:02:51 INFO  POST /orders 201 2104ms
+2026-11-09 08:03:10 INFO  GET /health 200 2ms
+2026-11-09 08:04:33 WARN  cache miss rate above 30%
+2026-11-09 08:05:01 ERROR failed to send receipt email to user 17: connection refused
+2026-11-09 08:05:02 INFO  queued email for retry
+2026-11-09 08:06:17 INFO  GET /products 200 120ms
+2026-11-09 08:06:18 INFO  GET /products/3 200 15ms
+2026-11-09 08:07:40 ERROR unhandled exception in /checkout: KeyError 'shipping_address'
+2026-11-09 08:07:41 INFO  GET /health 200 2ms
+2026-11-09 08:08:02 INFO  GET /users/22 200 37ms
+2026-11-09 08:09:15 WARN  deprecated endpoint /v1/cart called
+2026-11-09 08:10:00 INFO  GET /health 200 3ms
+2026-11-09 08:10:44 ERROR payment gateway timeout for order 9920
+2026-11-09 08:10:45 INFO  retrying order 9920
+2026-11-09 08:10:49 INFO  POST /orders 201 1877ms
+2026-11-09 08:12:30 INFO  GET /products 200 98ms
+2026-11-09 08:13:01 INFO  user 31 logged in
+2026-11-09 08:13:55 WARN  slow query on orders (390ms)
+2026-11-09 08:15:00 INFO  GET /health 200 2ms
+2026-11-09 08:16:12 ERROR database connection lost, reconnecting
+2026-11-09 08:16:14 INFO  database connection restored
+2026-11-09 08:17:00 INFO  GET /health 200 3ms
