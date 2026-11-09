@@ -2,7 +2,8 @@
 
 You grade the same outputs the judge graded, against the same rubric, then compare.
 
-    python level4_judge/calibrate.py grade              # you grade each output, p/f per criterion
+    python level4_judge/calibrate.py grade --demo       # 5 questions, picked to be interesting
+    python level4_judge/calibrate.py grade              # every criterion on every output
     python level4_judge/calibrate.py compare            # you vs the judge, row by row
 
 grade needs no API. compare reads results/human-*.json and results/grades-<label>.json.
@@ -28,16 +29,23 @@ def outputs_fingerprint(label: str) -> str:
 
 
 INTRO = """
-You're about to grade {n} outputs, the same ones the judge graded.
+You're about to answer {n} questions about the same outputs the judge graded.
 
-For each one you'll see three things:
+Each question shows you three things:
   1. what the agent was asked to do
   2. what the agent produced
-  3. the rubric: a short list of criteria
+  3. one criterion from the rubric
 
-Then you'll answer each criterion one at a time: p if the output passes it, f if it fails.
-Go by what each criterion actually says, not what you think it was meant to say.
+You answer p if the output passes that criterion, or f if it fails it.
+Go by what the criterion actually says, not what you think it was meant to say.
 If you can't decide, that's worth noticing: it usually means the criterion is vague.
+"""
+
+DEMO_NOTE = """
+This is the short demo version: {n} questions out of {total}, picked to be the
+interesting ones (anything the judge disagreed with itself on comes first). A real
+calibration grades everything, ideally with several people grading independently,
+so you can also measure how much the humans agree with each other.
 """
 
 
@@ -51,40 +59,114 @@ def _ask(prompt: str) -> bool:
         print("    please type p (pass) or f (fail)")
 
 
+def _interesting(label: str) -> list[tuple[str, int, int]]:
+    """(task, run, criterion index) worth a human look, most interesting first.
+
+    1. the judge's two rounds disagreed (needs grade --twice)
+    2. the judge gave different verdicts on different runs of the same task
+    3. the judge failed it
+    Returns nothing if there are no up-to-date judge grades.
+    """
+    path = RESULTS_DIR / f"grades-{label}.json"
+    if not path.exists() or path.stat().st_mtime < outputs_path(label).stat().st_mtime:
+        return []
+    grades = json.loads(path.read_text())
+    splits, varies, fails = [], [], []
+    first: dict[tuple[str, int], list] = {}
+    for g in grades:
+        rounds = [[x.get("pass") for x in (r.get("grades") or [])] for r in g["grades"]]
+        first[(g["task"], g["run"])] = rounds[0] if rounds else []
+        if len(rounds) >= 2:
+            for ci, (a, b) in enumerate(zip(rounds[0], rounds[1])):
+                if a is not None and b is not None and a != b:
+                    splits.append((g["task"], g["run"], ci))
+    by_task: dict[str, list] = {}
+    for (task, run), marks in first.items():
+        by_task.setdefault(task, []).append((run, marks))
+    for task, runs in by_task.items():
+        for ci in range(max((len(m) for _, m in runs), default=0)):
+            seen = {m[ci] for _, m in runs if ci < len(m) and m[ci] is not None}
+            if len(seen) > 1:
+                varies += [(task, run, ci) for run, m in sorted(runs) if ci < len(m)]
+    for (task, run), marks in sorted(first.items()):
+        fails += [(task, run, ci) for ci, v in enumerate(marks) if v is False]
+    return splits + varies + fails
+
+
+def pick_questions(outputs: list[dict], tasks: dict, label: str, demo: bool, k: int = 5) -> list[tuple[int, int]]:
+    """(output index, criterion index) pairs to ask about.
+
+    Full mode asks everything. Demo mode asks k questions: first the ones where the
+    judge's verdicts look shaky or interesting (see _interesting), then one judgment
+    criterion per task in turn. Code-checked criteria are skipped in demo mode, since
+    there's nothing to calibrate about counting words.
+    """
+    index = {(o["task"], o["run"]): i for i, o in enumerate(outputs)}
+    if not demo:
+        return [(i, ci) for i, o in enumerate(outputs) for ci in range(len(tasks[o["task"]]["criteria"]))]
+
+    def judged(task, ci):
+        return "[checked by code]" not in describe(tasks[task]["criteria"][ci])
+
+    chosen: list[tuple[int, int]] = []
+    for task, run, ci in _interesting(label):
+        if (task, run) in index and judged(task, ci):
+            chosen.append((index[(task, run)], ci))
+    first_run = min(o["run"] for o in outputs)
+    longest = max(len(t["criteria"]) for t in tasks.values())
+    for ci in range(longest):
+        for name in tasks:
+            if (name, first_run) in index and ci < len(tasks[name]["criteria"]) and judged(name, ci):
+                chosen.append((index[(name, first_run)], ci))
+    unique = list(dict.fromkeys(chosen))[:k]
+    return sorted(unique)
+
+
 def cmd_grade(args) -> None:
     data = json.loads(outputs_path(args.label).read_text())
     tasks = {t["name"]: t for t in load_tasks()}
     outputs = data["outputs"]
-    print(INTRO.format(n=len(outputs)))
+    questions = pick_questions(outputs, tasks, args.label, args.demo)
+    total = sum(len(tasks[o["task"]]["criteria"]) for o in outputs)
+
+    print(INTRO.format(n=len(questions)))
+    if args.demo:
+        print(DEMO_NOTE.format(n=len(questions), total=total))
     input("Press Enter to start. ")
-    verdicts = []
-    for i, o in enumerate(outputs, 1):
+
+    answers: dict[int, list] = {}
+    shown = None
+    for q, (i, ci) in enumerate(questions, 1):
+        o = outputs[i]
         task = tasks[o["task"]]
-        produced = "the README.md file it wrote" if task["output"].startswith("file:") else "its final reply"
-        print(f"\n{'=' * 70}\nOUTPUT {i} OF {len(outputs)}: {o['task']} (run {o['run']})\n{'=' * 70}")
-        print(f"\nWHAT THE AGENT WAS ASKED:\n  {task['prompt']}")
-        print(f"\nWHAT IT PRODUCED ({produced}):")
-        for line in o["output"].splitlines() or [""]:
-            print(f"  | {line}")
-        print(f"\nTHE RUBRIC ({len(task['criteria'])} criteria):")
-        for ci, crit in enumerate(task["criteria"], 1):
-            print(f"  {ci}. {describe(crit)}")
-        print("\nNow grade the output against each criterion.")
-        marks = []
-        for ci, crit in enumerate(task["criteria"], 1):
-            note = "\n    (code checks this one automatically; answer what you think)" if "[checked by code]" in describe(crit) else ""
-            marks.append(_ask(f"\n  Criterion {ci} of {len(task['criteria'])}: {describe(crit)}{note}\n    pass or fail? [p/f] "))
-        verdicts.append({"task": o["task"], "run": o["run"], "passes": marks})
+        if shown != i:
+            shown = i
+            produced = "the README.md file it wrote" if task["output"].startswith("file:") else "its final reply"
+            print(f"\n{'=' * 70}\n{o['task']} (run {o['run']})\n{'=' * 70}")
+            print(f"\nWHAT THE AGENT WAS ASKED:\n  {task['prompt']}")
+            print(f"\nWHAT IT PRODUCED ({produced}):")
+            for line in o["output"].splitlines() or [""]:
+                print(f"  | {line}")
+        crit = describe(task["criteria"][ci])
+        note = "\n    (code checks this one automatically; answer what you think)" if "[checked by code]" in crit else ""
+        marks = answers.setdefault(i, [None] * len(task["criteria"]))
+        marks[ci] = _ask(f"\n  QUESTION {q} OF {len(questions)}. Does the output above pass this criterion?\n"
+                         f"    {crit}{note}\n    pass or fail? [p/f] ")
+
+    verdicts = [{"task": outputs[i]["task"], "run": outputs[i]["run"], "passes": marks}
+                for i, marks in sorted(answers.items())]
     RESULTS_DIR.mkdir(exist_ok=True)
     path = RESULTS_DIR / f"human-{args.name}.json"
     path.write_text(json.dumps({
         "name": args.name,
         "label": args.label,
+        "demo": args.demo,
         "outputs_fingerprint": outputs_fingerprint(args.label),
         "criteria": {name: t["criteria"] for name, t in tasks.items()},
         "verdicts": verdicts,
     }, indent=2))
     print(f"\nsaved to {path}")
+    print("next: python level4_judge/calibrate.py compare")
 
 
 def _regrade(name: str) -> str:
@@ -95,7 +177,7 @@ def cmd_compare(args) -> None:
     tasks = {t["name"]: t for t in load_tasks()}
     current = outputs_fingerprint(args.label)
     current_criteria = {name: t["criteria"] for name, t in tasks.items()}
-    humans = {}
+    humans, demo_graders = {}, []
     for p in sorted(RESULTS_DIR.glob("human-*.json")):
         d = json.loads(p.read_text())
         if d.get("label") != args.label:
@@ -107,6 +189,8 @@ def cmd_compare(args) -> None:
             print(f"skipping {d['name']}: the rubric changed since they graded. Re-run: {_regrade(d['name'])}")
             continue
         humans[d["name"]] = {(v["task"], v["run"]): v["passes"] for v in d["verdicts"]}
+        if d.get("demo"):
+            demo_graders.append(d["name"])
     if not humans:
         sys.exit("no up-to-date human grades yet; run: calibrate.py grade")
 
@@ -143,6 +227,8 @@ def cmd_compare(args) -> None:
                 marks = graders[n].get(key)
                 v = marks[ci] if marks and ci < len(marks) else None
                 row.append("pass" if v is True else "fail" if v is False else "-")
+            if all(row[names.index(h)] == "-" for h in humans):
+                continue  # no human answered this one (demo mode), so there's nothing to compare
             label = f"{task} r{run}: {describe(crit)}"
             disagree = len(set(x for x in row if x != "-")) > 1
             print(f"{label[:60]:<60} " + " ".join(f"{x:>8}" for x in row) + ("  <--" if disagree else ""))
@@ -177,6 +263,10 @@ def cmd_compare(args) -> None:
     else:
         print("\nno disagreements: every grader gave the same verdict on every criterion")
 
+    if demo_graders:
+        print(f"\nnote: {', '.join(demo_graders)} used --demo, so only those questions are compared. "
+              "A real calibration grades everything, with several people if you can.")
+
     print("\nhow to read it:")
     if len(humans) == 1:
         print("  you and the judge agree     -> the judge reads this criterion the way you do")
@@ -195,6 +285,7 @@ def main() -> None:
     g = sub.add_parser("grade")
     g.add_argument("--name", default="me", help="who is grading (default: me)")
     g.add_argument("--label", default="baseline")
+    g.add_argument("--demo", action="store_true", help="answer 5 interesting questions instead of all of them")
     g.set_defaults(fn=cmd_grade)
     c = sub.add_parser("compare")
     c.add_argument("--label", default="baseline")

@@ -153,17 +153,19 @@ When you wrote "pitched at a junior engineer: no unexplained jargon," it probabl
 
 Calibration is how you find that out on purpose, instead of discovering it later when your eval numbers stop making sense. You grade the same outputs the judge graded, using only the rubric's words. Then you line up your answers next to the judge's and look at every place they differ. Each difference points at a sentence that can be read more than one way, or at a judge that's misreading it.
 
-### Step 1: grade the outputs yourself
+### Step 1: grade some outputs yourself
 
 ```
-python level4_judge/calibrate.py grade
+python level4_judge/calibrate.py grade --demo
 ```
 
-It starts with a short explanation, then shows you the six outputs one at a time. Each one is laid out like this:
+`--demo` asks you **5 questions** instead of all 20. It picks the interesting ones: anything the judge disagreed with itself on, then criteria where the judge gave different verdicts on the two runs of the same task, then anything it failed, and then one criterion from each task to round it out. (It skips the `[checked by code]` criteria, since there's nothing to calibrate about counting words.)
+
+It starts with a short explanation, then shows you each output followed by the questions about it, like this:
 
 ```
 ======================================================================
-OUTPUT 1 OF 6: commit_message (run 1)
+commit_message (run 1)
 ======================================================================
 
 WHAT THE AGENT WAS ASKED:
@@ -175,24 +177,19 @@ WHAT IT PRODUCED (its final reply):
   | slugify() documents that it turns "Hello World!" into "hello-world".
   | It never lowercased its input, so it returned "Hello-World". ...
 
-THE RUBRIC (3 criteria):
-  1. Subject line is 72 characters or fewer and written in the imperative ...
-  2. Body explains WHY the change was needed ..., not only what changed
-  3. Contains nothing besides the commit message: no "Here's a commit message:", ...
-
-Now grade the output against each criterion.
-
-  Criterion 1 of 3: Subject line is 72 characters or fewer and written in the imperative ...
+  QUESTION 1 OF 5. Does the output above pass this criterion?
+    Subject line is 72 characters or fewer and written in the imperative ("Fix ...", not "Fixed ..." or "Fixes ...")
     pass or fail? [p/f]
 ```
 
-So you're never grading the output as a whole. You're answering one yes/no question at a time: does _this_ output meet _this_ criterion? Type `p` or `f` for each, and it moves on. That's 20 answers in total. It doesn't call the API, and your answers are saved to `results/human-me.json`.
+So you're never grading the output as a whole. Each question is one yes/no call: does _this_ output meet _this_ criterion? Type `p` or `f`, and it moves on. It doesn't call the API, and your answers are saved to `results/human-me.json`.
 
 A few things that make this work better:
 
 - **Grade what the criterion says, not what you meant when you wrote it.** If you can't decide, notice that. It's a finding, not a mistake on your part.
 - **Don't look back at the judge's grades first.** Once you've seen its answer, it's really hard not to anchor on it.
-- **You'll be asked about the `[checked by code]` criteria too.** Count if you want, or just answer honestly. It's a nice check that the code and you agree on what "150 words" means.
+
+**In real life, you'd do a lot more than 5.** Drop `--demo` and it asks every criterion on every output (20 questions here), and a real eval set would have far more outputs than six. You'd also want more than one human grading, independently. More on that in step 4.
 
 ### Step 2: compare yourself with the judge
 
@@ -200,19 +197,19 @@ A few things that make this work better:
 python level4_judge/calibrate.py compare
 ```
 
-You get one row per criterion per output, with your verdict next to the judge's. Then, for every row where you disagree, it shows the judge's reason. Here's an example where the human grader was strict about jargon:
+You get one row for each question you answered, with your verdict next to the judge's. Then, for every row where you disagree, it shows the judge's reason. Here's a real run where the human grader was strict about jargon:
 
 ```
 task / criterion                                                   me    judge
 --------------------------------------------------------------------------------
+commit_message r1: Subject line is 72 characters or fewer an     pass     pass
+explain_trace r1: Correctly identifies the cause: the user d     pass     pass
 explain_trace r1: Pitched at a junior engineer: no unexplain     fail     fail
-explain_trace r1: max words 150  [checked by code]               pass     pass
 explain_trace r2: Pitched at a junior engineer: no unexplain     fail     pass  <--
-explain_trace r2: max words 150  [checked by code]               fail     fail
-...
+write_readme r1: States in the first few lines what the modu     pass     pass
 
 agreement (share of criteria where both graders gave the same verdict):
-  me vs judge: 19/20 (95%)
+  me vs judge: 4/5 (80%)
 
 where the graders disagreed:
 
@@ -223,7 +220,7 @@ where the graders disagreed:
 ```
 
 - **`<--`** marks every row where you and the judge disagree. Those are the rows that matter.
-- **The agreement line** is a quick summary. 95% sounds great, but look at _where_ the 5% is. Here it's the same vague criterion that split earlier, which is not a coincidence.
+- **The agreement line** is a quick summary, but look at _where_ the disagreement is. Here it's the same vague criterion that split earlier, which is not a coincidence.
 - **The judge's reason** is the most useful part. In this example, the judge noticed exactly the same words you did ("call chain," `.get()`) and just drew the line in a different place. It even called its own verdict "borderline."
 - **The `judge` column** uses the first round from your last `judge.py grade` run, the same as the pass-rate table.
 
@@ -253,7 +250,11 @@ After you change a criterion, re-run `judge.py grade --twice`, then grade by han
 
 And it's not a one-time thing. New outputs bring edge cases nobody thought of when the rubric was written. Every time you change the rubric, the agent, or the judge model, it's worth re-checking a sample by hand. A judge you calibrated once, months ago, against outputs that don't look like today's, isn't really calibrated anymore.
 
-**On a real team, add more readers.** One person plus a judge is enough to learn the habit. In practice, the most useful extra grader is someone who _didn't_ write the rubric, because all they have is the words, and you also have everything you meant and didn't write down. `calibrate.py grade --name <their name>` saves their answers separately on the same machine, and `compare` shows every grader side by side. A different judge model works as a cheap extra reader too: `JUDGE_MODEL=claude-sonnet-5-5 python level4_judge/judge.py grade` re-grades with Sonnet, and the `judge` column will show how it read your rubric. (Re-run plain `judge.py grade` afterwards to get the default judge back.)
+**On a real team, grade more and add more readers.** Five questions and one person is enough to learn the habit, not enough to trust a judge. In practice you'd grade a much bigger sample (every criterion, on enough outputs to cover the edge cases), and you'd have several people grade the same items independently.
+
+The reason for multiple people is that it lets you measure **inter-annotator agreement**: how often your human graders agree with _each other_. That number matters more than it sounds. If two careful people only agree 70% of the time on a criterion, the criterion is ambiguous, and there's no stable "right answer" to check the judge against. The simplest measure is percent agreement, which is what `compare` prints. The standard one is **Cohen's kappa** (or Fleiss' kappa for more than two graders), which also corrects for agreement that would happen by chance. That correction matters when almost everything passes: two graders who both answer "pass" to everything agree 100% of the time without telling you anything.
+
+The most useful extra grader is someone who _didn't_ write the rubric, because all they have is the words, and you also have everything you meant and didn't write down. `calibrate.py grade --name <their name>` saves their answers separately on the same machine, and `compare` shows every grader side by side, with agreement for each pair. A different judge model works as a cheap extra reader too: `JUDGE_MODEL=claude-sonnet-5-5 python level4_judge/judge.py grade` re-grades with Sonnet, and the `judge` column will show how it read your rubric. (Re-run plain `judge.py grade` afterwards to get the default judge back.)
 
 ## What to notice
 
