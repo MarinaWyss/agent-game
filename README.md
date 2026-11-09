@@ -40,7 +40,9 @@ That one failing test is on purpose. It's the bug the agent fixes in every level
 
 ## How to play
 
-Open `level0_watch/README.md` and do what it says. When you're done, open `level1_loop/README.md`. Repeat.
+Just want the commands, without the explanations? `RUNBOOK.md` has every step in order: what to run, what to open, and what to change.
+
+Otherwise, open `level0_watch/README.md` and do what it says. When you're done, open `level1_loop/README.md`. Repeat.
 
 Every level's README has the same sections: **Why this level**, **What this is**, **Type this**, **What to notice**, and **Questions you might have** at the end. I'd suggest keeping the current README open next to your terminal so you never have to think about what's next.
 
