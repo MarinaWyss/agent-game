@@ -77,3 +77,29 @@ python level4_judge/calibrate.py compare
 ## If the judge agrees with itself every time
 
 Good! Pass/fail against a tight rubric _should_ be stable. The `--numeric` and `pairwise` demos are there to show you what instability looks like. If pairwise doesn't flip either, the two outputs were probably pretty different in quality, which is fine. Position bias shows up when they're close.
+
+## Questions you might have
+
+**You're using a model to grade a model. Why would I trust that?**
+You shouldn't, until you've checked it. That's what `calibrate.py` is for. You (and ideally another person) grade the same outputs against the same rubric, then compare against the judge. Where the humans agree and the judge doesn't, fix the judge prompt. Where the humans disagree, fix the rubric. Where everyone agrees, you can let the judge handle that criterion on its own. Trust gets earned one criterion at a time.
+
+**Why pass/fail per criterion instead of a score out of 10?**
+A 7/10 is unstable (run `grade --numeric --twice` and watch it move), hard to interpret (7 out of what, exactly?), and doesn't tell you what to do. "Fails criterion 2: the body doesn't say why" is stable, clear, and tells you what to fix. Break the vague judgment into specific yes/no questions and there's very little subjectivity left.
+
+**Why is the word count checked by code?**
+Because language models can't count reliably. Any criterion that's really a measurement (length, line count, whether a specific string appears, valid JSON) belongs in code. The `max_words:` syntax in the rubric sends those to code and only sends the judgment calls to the model.
+
+**Why is the judge a different model from the agent?**
+Models tend to prefer their own style (self-preference bias), and using a different model reduces that. The tradeoff is that the judge has to be capable enough to apply the rubric. Haiku is fine for tight pass/fail criteria on short outputs. For subtler judgments, I'd use a stronger judge and accept the extra cost. Both models are set in `harness/__init__.py`.
+
+**What's position bias, exactly?**
+Ask a judge "which is better, A or B?" and it can lean toward one position no matter what's in it. `pairwise` asks in both orders, and if the preference flips, that's the bias. The fixes: grade each output against the rubric on its own (which is what `grade` does), or if you really need to compare, ask in both orders and only count verdicts that agree.
+
+**Any other judge biases I should know about?**
+Verbosity (longer looks better), confidence (sounding sure looks correct), and leniency (the really-nice-teacher problem). None of these go away completely. You measure them and correct for them.
+
+**What do `judge error`, `n/a`, or "no verdict" mean in the output?**
+The judge didn't return a usable answer for that one (usually malformed JSON). The script tries to recover what it can, and if it can't, it says so and leaves that comparison out of the totals instead of guessing.
+
+**Who writes the rubric?**
+You do. This is the part that can't be automated, and it's also the part that's easiest to skip. Deciding that "a good commit message explains why" is a product decision, and the model only applies it. Keep the rubric versioned with the results (each grade in `results/` records the criterion text it was graded against), because changing a criterion changes what the number means.

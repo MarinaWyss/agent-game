@@ -101,3 +101,20 @@ Between the request and the result, Claude Code decides whether to run the comma
 ## If the run goes sideways
 
 Reset with `python -m harness.workspace` from the repo root and try once more. If it does something weird, that's worth a look too. The loop is the same; the model just made a different choice. Then move on to level 1, where you build the loop yourself and it's fully under your control.
+
+## Questions you might have
+
+**So the model never actually executes anything?**
+Right. The API returns a `tool_use` block, which is just a name and a JSON object of arguments. Your code (here, Claude Code) decides whether to run it and what to send back. Everything you'd call "safety" in a coding agent lives in that gap. The model only ever sees text going in and text coming out. [How tool use works](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)
+
+**Is CLAUDE.md a system prompt?**
+Functionally, yes. It's project-level instructions that Claude Code loads into the context at the start of a session, from the working directory and its parents. The real system prompt belongs to Claude Code and is much longer; CLAUDE.md is the part you control. [Memory](https://code.claude.com/docs/en/memory)
+
+**Why did it edit the file with `sed` instead of the `Edit` tool?**
+Because the model picks the tool, and `Bash` can do almost anything. Claude Code offers both, and the model usually reaches for `Edit`, but not always. It's the same loop either way: a request, a result, a decision about what to do next.
+
+**Why did it run `git diff` and get confused when the output was empty?**
+`workspace/` is gitignored, so git doesn't track it and the diff is always empty. The model noticed, checked the file directly, and moved on. That's the loop doing its job: it reacts to whatever the result actually says, including results it didn't expect.
+
+**I have auto-approve on. How do I see the "asking" part?**
+You won't see a prompt, because your settings already said yes. The request and the decision still happen; they just happen instantly. The `⏺` lines are your best view of the asking, and level 2 shows the decision step on purpose.

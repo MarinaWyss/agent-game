@@ -42,11 +42,9 @@ That one failing test is on purpose. It's the bug the agent fixes in every level
 
 Open `level0_watch/README.md` and do what it says. When you're done, open `level1_loop/README.md`. Repeat.
 
-Every level's README has the same sections: **Why this level**, **What this is**, **Type this**, and **What to notice**. I'd suggest keeping the current README open next to your terminal so you never have to think about what's next.
+Every level's README has the same sections: **Why this level**, **What this is**, **Type this**, **What to notice**, and **Questions you might have** at the end. I'd suggest keeping the current README open next to your terminal so you never have to think about what's next.
 
 The diagrams are Mermaid. GitHub and Obsidian draw them for you; VS Code needs the "Markdown Preview Mermaid Support" extension.
-
-`FAQ.md` has the questions that tend to come up at each level, with short answers and links to the docs. It's worth skimming before you start.
 
 ## Layout
 
@@ -78,3 +76,11 @@ Each level README has a note at the bottom for when things go sideways. The gene
 - `python -m harness.workspace` resets the toy project.
 - `level1_loop/solution/agent.py` is the finished loop, if the build in level 1 stalls.
 - Every eval run saves full transcripts to `results/`. If the API is slow or down, you can still read through a previous run.
+
+A few setup gotchas:
+
+- **`pytest: command not found` inside the agent's shell.** The agent's `run_shell` inherits your environment, so activate the venv (`source .venv/bin/activate`) in the terminal you run the levels from. The level 3 checks use `sys.executable`, so they're fine either way, but the agent isn't.
+- **`workspace/` gets wiped before every run.** Don't put anything you care about in there. `_pristine/workspace/` is the original.
+- **API key.** Put it in `.env` (which is gitignored), and `harness/__init__.py` loads it. Claude Code's own login is separate (a subscription, or `claude auth login --console` for API billing).
+- **Mac and Linux only**, as written. On Windows, use WSL.
+- **The costs shown are estimates** based on the list prices in `harness/__init__.py`, meant for comparing versions. Your actual invoice is the source of truth.

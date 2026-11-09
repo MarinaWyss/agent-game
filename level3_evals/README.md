@@ -49,7 +49,7 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r[
 ## What to notice
 
 - **Why N times.** One run tells you it _can_ work. Several runs tell you how _often_ it works. It's really tempting to run something once, see green, and ship it. Then the fourth user gets the failure.
-- **Look at the `95% CI` column.** 3 out of 3 comes with an interval of roughly 44% to 100%. Three runs can't tell an 80% agent from a perfect one. The column is there so nobody mistakes "100%" for knowing something. (Telling 70% from 90% with any confidence takes about 60 runs per version; there's more on this in `FAQ.md`.)
+- **Look at the `95% CI` column.** 3 out of 3 comes with an interval of roughly 44% to 100%. Three runs can't tell an 80% agent from a perfect one. The column is there so nobody mistakes "100%" for knowing something. (Telling 70% from 90% with any confidence takes about 60 runs per version; more on that below.)
 - **Designing the grader is the real work.** Look at `fix_failing_test/check.py`. Passing tests aren't enough, because the agent could have just deleted the assertion. So the check also hashes the test file. Outcome checks ask "did it end up right?" Process checks ask "did it get there honestly?" You usually want both.
 - **Don't trust the agent's own tests.** `add_parse_date/check.py` calls the function with inputs the agent never saw. The agent's tests prove its code matches its own understanding of the task. Yours prove it matches what you actually asked for.
 - **Reason strings matter.** Every check returns _why_ it failed. A pass rate tells you there's a problem; the reasons tell you which one. Build evals you can actually debug from.
@@ -59,3 +59,31 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r[
 ## If every run passes
 
 That happens. It means these tasks are too easy to be a useful eval, because a good eval set needs room to fail. Try `--n 5` on `add_parse_date` alone (it has the most ways to go subtly wrong), or move on to level 4, where you won't have this problem.
+
+## Questions you might have
+
+**Why can't I see anything while it runs?**
+`--quiet` hides the transcripts so the table is easy to find at the end. Drop `--quiet` if you want to watch every run the way you did in level 2. The permission gate is off for evals (every command is allowed), since nobody is around to type `y`.
+
+**Isn't 3 runs per task kind of a joke, statistically?**
+Yes, and the table admits it. The `95% CI` column is a Wilson interval, and 3 out of 3 gives you roughly 44% to 100%. You can't tell an 80% agent from a 100% agent with 3 runs.
+
+As a rule of thumb from a standard two-proportion power calculation: to tell a 70% agent from a 90% one (80% power, p<0.05), you need about 60 runs per version. To detect a 5-point change, you need several hundred. The default is 3 so a run finishes quickly. The point of the column is to show you the uncertainty instead of hiding it behind a percentage.
+
+**What if the grader itself is wrong?**
+A grader is code, and code has bugs. So test it. Run the check against the untouched workspace (it should fail), against a correct fix (it should pass), and against a known cheat (it should fail, with the right reason). All three checks in this repo were tested that way. A grader that can't fail is worse than no grader at all.
+
+**Should I set temperature to 0 for reproducibility?**
+Only if you also ship at temperature 0, because evals should run the way production runs. And it wouldn't get you determinism anyway: adaptive thinking, infrastructure updates, and parallel tool ordering all add variation. I'd run more samples instead of pretending there's no variance.
+
+**pass@k or pass^k?**
+It depends on the question. pass@k (at least one of k runs succeeds) measures "can it do this at all?" pass^k (all k runs succeed) measures "can I rely on it?" For an agent that runs unattended, pass^k is the honest number. The table shows the plain pass rate, but you can compute either one from `results/*.json`.
+
+**Does the model ID matter when comparing results over time?**
+Yes. Every Claude model ID is a pinned snapshot: the weights behind `claude-sonnet-5-5` never change (the serving infrastructure can, slightly). So results stay comparable until you change the string. That's why every results file records the model and the full system prompt. Re-baseline when either one changes. [Model IDs and versioning](https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions)
+
+**Aren't these tasks too easy?**
+Possibly, yeah. A good eval set has room to fail: if everything passes every time, it isn't measuring much. The fix is to add tasks based on real failures, which is where eval sets come from in practice anyway. The ones here are just meant to show the mechanics.
+
+**How do I add my own task?**
+Make a new folder in `tasks/` with a `prompt.txt` and a `check.py` that defines `check(workspace)` and returns `(passed, reason)`. `run_evals.py` picks up every folder automatically. If your task needs files the toy project doesn't have, add them to `_pristine/workspace/`.

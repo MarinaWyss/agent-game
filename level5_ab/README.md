@@ -56,3 +56,20 @@ That's 2 runs x 6 tasks x 2 versions = 24 agent runs, plus 12 judge calls. If yo
 ## Close the loop
 
 Pull up `level0_watch/README.md` one last time. Everything in this repo fits in that one diagram, plus a box around it. Claude Code is that box with a lot of good engineering inside, and evals are how you find out whether your box is any good.
+
+## Questions you might have
+
+**I added "never modify test files" to the prompt and the test-editing failure went away. Didn't I just overfit to the eval?**
+Kind of, and that's fine when the eval captures behavior you actually want. The real danger is the bigger version of this: tuning the prompt until the six tasks in this repo pass and then deciding the agent is good. Those six tasks are your eval set, not the world. Keep some tasks held back, add new ones from real failures, and treat a change that helps one task and hurts another as useful information, not noise.
+
+**B scored 5/6 and A scored 4/6. Is B better?**
+Not on that evidence. With 2 runs per task you've learned almost nothing about the pass rates, but quite a lot about how things fail (so read the reasons). The honest conclusion is "B looks promising, let's run 20 more," not "B is better."
+
+**Why are the level 4 rows counted in criteria instead of runs?**
+Because each text output gets graded on several criteria. The number on the right is criteria times runs: `commit_message` has three criteria, so with `--n 2` it's out of 6, and one failed criterion in one run shows up as `5/6`. It's a finer-grained number than pass/fail per run.
+
+**How would this run in CI?**
+Same scripts, either on a schedule or on every change to `SYSTEM.md`. Store the results in the repo so the diffs are easy to review, and fail the build on a regression bigger than the noise you've measured. For runs that don't need to be fast, the Message Batches API is 50% off. You can also run things in parallel with a thread pool, as long as you stay within your rate limits.
+
+**Can I compare models the same way?**
+Yes. Set `AGENT_MODEL` in `.env`, re-run, and compare the tables. That's the honest answer to "is the new model better for my task?", and honestly it's the main reason to have an eval set at all.
