@@ -31,7 +31,7 @@ git clone https://github.com/MarinaWyss/agent-game.git && cd agent-game
 ```
 source .venv/bin/activate
 python -m harness.workspace          # resets the toy project
-cd workspace && python -m pytest -q  # should show 1 failing test
+(cd workspace && python -m pytest -q)  # should show 1 failing test
 ```
 
 ## How to play

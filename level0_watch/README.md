@@ -2,6 +2,18 @@
 
 **Goal:** see Claude Code do a task and name the four steps it repeats.
 
+## Why start here
+
+People say Claude Code is "an agent." That word gets used for a lot of things, so here's what it means in this repo.
+
+A **model** on its own is a text-in, text-out function. You send it a conversation, it sends back the next message. It can't run your tests, open a file, or check whether its answer worked. A chatbot is a model plus a chat window: it answers, and then it waits for you.
+
+An **agent** is a model plus a program that lets it act and see what happened. The program gives the model a list of tools ("you can run a shell command," "you can read a file"). When the model replies with "run `pytest`," the program runs `pytest` and sends the output back as the next message. Then it asks the model again. It keeps going until the model replies without asking for anything. The model does the deciding. The program does the doing, and it decides what the model is allowed to do.
+
+That program is a loop, and the loop is surprisingly small. Claude Code is that loop plus a lot of careful engineering around it: well-designed tools, permission prompts, CLAUDE.md files, context management. Under all of that, it's the same four steps over and over.
+
+The point of this level is to watch a real agent work on a task small enough that you can follow every step, and match each step to the diagram below. In level 1 you build the same loop yourself in about 70 lines. Everything after that (the harness, the evals) is about the box around the loop and how to tell whether it's any good.
+
 ## What this is
 
 Claude Code is a loop. It asks the model what to do, the model asks for a tool, Claude Code runs the tool and sends the result back, and the model decides again. It stops when the model answers without asking for a tool. Everything else (permissions, the CLAUDE.md file, context management) is scaffolding around that loop.
@@ -16,18 +28,27 @@ flowchart LR
 
 ## Type this
 
-Open a terminal in the `workspace/` folder and start Claude Code. Then give it one task:
+**Start Claude Code from inside `workspace/`, not from the repo root.** This matters. Claude Code reads `CLAUDE.md` from the folder it starts in and from that folder's parents, never from subfolders. Start it in the repo root and it won't see `workspace/CLAUDE.md`. It will see the whole workshop instead (READMEs, `_pristine/`, the level folders) and spend its first few turns working out what this repo is.
+
+From the repo root:
 
 ```
+source .venv/bin/activate
+python -m harness.workspace
 cd workspace
+pwd          # should end in /agent-game/workspace
 claude
 ```
+
+Activating the venv first means `pytest` is on the path for Claude Code's shell. Resetting the workspace puts the failing test back if you already fixed it earlier.
+
+Then give it one task:
 
 ```
 Run the tests and fix whatever fails.
 ```
 
-Press **Ctrl+O** to open the transcript viewer so the full tool calls and results are visible instead of collapsed (or start it as `claude --verbose`).
+Press **Ctrl+O** to open the transcript viewer so the full tool calls and results are visible instead of collapsed (or start it as `claude --verbose`). Claude Code will ask permission before it runs a shell command or edits a file. Say yes.
 
 ## What you should see
 
@@ -40,13 +61,15 @@ The task is designed so there is only one sensible path. Expect roughly this seq
 5. `Bash: python -m pytest -q` (all pass)
 6. Final message, no tool call. Loop ends.
 
-Each numbered step is one trip around the diagram. Match what's on screen to the diagram as it goes.
+The details will vary. It might read both files in one turn, or make the edit through `Bash` instead of `Edit`. The shape stays the same: run the tests, look, change, run the tests again, stop. Each numbered step is one trip around the diagram. Match what's on screen to the diagram as it goes.
+
+**If its first move is `ls` on a folder full of `level*` directories, or it reads the top-level `README.md`,** you started it in the repo root. Quit (`/exit`), `cd workspace`, and start again. It's also a nice preview of level 2: same model, same task, different context, different behavior.
 
 ## What to notice
 
 - Every tool call is the model *asking*. Claude Code decides whether to run it. That gap is where permissions live.
-- `workspace/CLAUDE.md` told it to run tests first and announce each step. Claude Code loads that file into the context at startup, from the working directory and its parents; it's the part of the system prompt you control. Open the file and read it. (Your own mini agent in level 1 won't load it automatically. Only Claude Code does; the mini agent only sees it if it happens to `read_file` it. Remember that when the mini agent edits a test in level 3.)
-- What does the model need to know to make the second `pytest` call? The result of the `Edit`, which is why results get fed back into the conversation. The conversation *is* the agent's memory.
+- `workspace/CLAUDE.md` told it to run tests first and announce each step. Claude Code loads that file into the context at startup; it's the part of the system prompt you control. Open the file and read it. (Your own mini agent in level 1 won't load it automatically. Only Claude Code does; the mini agent only sees it if it happens to `read_file` it. Remember that when the mini agent edits a test in level 3.)
+- What does the model need to know to make the second `pytest` call? The result of the edit, which is why results get fed back into the conversation. The conversation *is* the agent's memory.
 
 ## If the run goes sideways
 
