@@ -62,7 +62,7 @@ python level3_evals/run_evals.py --n 3 --quiet
 Three tasks times three runs is nine agent runs, so this one takes a little while. When the table prints, find a failure (if there is one) and open its transcript:
 
 ```
-python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r['run'], r['reason']) for r in d['runs'] if not r['passed']]" level3_evals/results/*-baseline.json
+python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r['run'], r['reason']) for r in d['runs'] if not r['passed']]" "$(ls -t level3_evals/results/*-baseline.json | head -1)"
 ```
 
 (Or just open the JSON file. The `transcript` field for each run has the full sequence of tool calls.)
