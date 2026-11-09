@@ -1,6 +1,6 @@
-# FAQ: the questions a senior engineer will ask
+# FAQ: the questions that come up
 
-Organized by the level where they usually come up. Each answer is short enough to say on air; the links are for after.
+Organized by the level where they usually come up. Each answer is short; the links go deeper.
 
 ---
 
@@ -24,7 +24,7 @@ It can, and it does (read two files in one turn, say). All of the `tool_result` 
 **How does the model know a tool failed?**
 Two ways in this harness: the result text starts with `ERROR` or `DENIED` with an explanation of what to do instead, and the `tool_result` carries `is_error: true`. Write error messages for the model the way you'd write them for a junior colleague: what went wrong and what to try next, not just "failed."
 
-**What about rate limits and 529 overloaded errors during the demo?**
+**What about rate limits and 529 overloaded errors?**
 The SDK retries 429s, 5xx and connection errors with backoff on its own. The harness sets `max_retries=5`. If the API is having a bad hour, the run gets slower, not broken.
 
 **Isn't `run_shell` with `shell=True` a gaping hole?**
@@ -56,7 +56,7 @@ Hooks (shell commands that run before or after tool calls), subagents (the same 
 Because the agent can make tests pass by editing the tests. `fix_failing_test/check.py` catches exactly that by hashing `test_utils.py`. "Tests pass" is an outcome check; "and it didn't touch the tests" is a process check. You want both. More generally, the agent's own verification is not your verification: `add_parse_date/check.py` calls the function with inputs the agent never saw.
 
 **Isn't 3 runs per task a joke statistically?**
-Yes, and the table says so: the `95% CI` column is a Wilson interval. 3/3 gives roughly 44% to 100%. You can't distinguish an 80% agent from a 100% agent with 3 runs. Rule of thumb from a standard two-proportion power calculation: to tell a 70% agent from a 90% one (80% power, p<0.05) you need about 60 runs per arm; to detect a 5-point change you need several hundred. The demo uses 3 so it finishes in ten minutes; the point of the column is to make the uncertainty visible rather than hide it behind a percentage.
+Yes, and the table says so: the `95% CI` column is a Wilson interval. 3/3 gives roughly 44% to 100%. You can't distinguish an 80% agent from a 100% agent with 3 runs. Rule of thumb from a standard two-proportion power calculation: to tell a 70% agent from a 90% one (80% power, p<0.05) you need about 60 runs per arm; to detect a 5-point change you need several hundred. The default is 3 so a run finishes quickly; the point of the column is to make the uncertainty visible rather than hide it behind a percentage.
 
 **Should I set temperature to 0 for reproducibility?**
 Only if you ship at temperature 0. Evals should run the way production runs. And it wouldn't buy determinism anyway: adaptive thinking, infrastructure updates, and parallel tool ordering all introduce variance. Run more samples instead of pretending there's none.
@@ -81,7 +81,7 @@ Possibly. A good eval set has headroom: if everything passes every time, the set
 ## Evals, non-deterministic (level 4)
 
 **You're using a model to grade a model. Why would I trust that?**
-You shouldn't, until you've checked it. That's what `calibrate.py` is: you and another human grade the same outputs against the same rubric, then compare to the judge. Where humans agree and the judge doesn't, fix the judge prompt. Where humans disagree, fix the rubric. Where all three agree, let the judge run unattended on that criterion. Trust is earned per criterion, not granted to the judge.
+You shouldn't, until you've checked it. That's what `calibrate.py` is: you (and ideally another human) grade the same outputs against the same rubric, then compare to the judge. Where humans agree and the judge doesn't, fix the judge prompt. Where humans disagree, fix the rubric. Where all three agree, let the judge run unattended on that criterion. Trust is earned per criterion, not granted to the judge.
 
 **Why pass/fail per criterion instead of a score out of 10?**
 A 7/10 is unstable (run `grade --numeric --twice` to watch it drift), uninterpretable (7 out of what?), and unactionable. "Fails criterion 2: body doesn't say why" is stable, interpretable and tells you what to fix. Decompose the vague judgment into specific yes/no questions and the subjective residue shrinks to almost nothing.
@@ -109,7 +109,7 @@ You do. This is the part that can't be automated and the part engineers skip. Wr
 In a sense, and that's fine when the eval encodes behavior you actually want. The danger is the general version: tuning the prompt until the six tasks in the repo pass and concluding the agent is good. The six tasks are the eval set, not the world. Keep some tasks held out, add new ones from production failures, and treat a prompt change that helps one task and hurts another as information, not noise.
 
 **B scored 5/6 and A scored 4/6. Is B better?**
-Not on that evidence. Look at the intervals. With n=2 per task you've learned almost nothing about the pass rates and quite a lot about the failure modes (read the reasons). Say "B looks promising, run 20 tonight" rather than "B is better."
+Not on that evidence. Look at the intervals. With n=2 per task you've learned almost nothing about the pass rates and quite a lot about the failure modes (read the reasons). The honest conclusion is "B looks promising, run 20 more" rather than "B is better."
 
 **How would this run in CI?**
 Same scripts, scheduled or on every change to `SYSTEM.md`. Store results in the repo so diffs are reviewable. Fail the build on a regression beyond the noise floor you've measured. For offline runs the Message Batches API is 50% off and has no latency requirement; parallelize with a thread pool but respect your rate limits.
@@ -126,6 +126,6 @@ Yes. Set `AGENT_MODEL` in `.env`, re-run, compare tables. That's the honest answ
 - **Level 0 starts Claude Code in `workspace/`; level 1 starts it in the repo root.** CLAUDE.md is picked up from the working directory and its parents, so level 0 needs to start inside `workspace/`.
 - **`workspace/` is wiped before every eval run.** Never put anything you care about in it. `_pristine/workspace/` is the source of truth.
 - **Mermaid diagrams render natively on github.com and in Obsidian.** VS Code needs the "Markdown Preview Mermaid Support" extension; the built-in preview won't draw them.
-- **API key.** Put it in `.env` (gitignored); `harness/__init__.py` loads it. Claude Code's own login is separate (subscription or `claude auth login --console` for API billing). Set a spend limit in the Console before the call.
+- **API key.** Put it in `.env` (gitignored); `harness/__init__.py` loads it. Claude Code's own login is separate (subscription or `claude auth login --console` for API billing). Set a spend limit in the Console.
 - **Mac and Linux only** as written. On Windows use WSL.
 - **Costs shown are estimates** from documented list prices in `harness/__init__.py`, for comparing variants. Your invoice is the truth.

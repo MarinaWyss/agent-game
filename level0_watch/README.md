@@ -40,14 +40,14 @@ The task is designed so there is only one sensible path. Expect roughly this seq
 5. `Bash: python -m pytest -q` (all pass)
 6. Final message, no tool call. Loop ends.
 
-Each numbered step is one trip around the diagram. Point at the screen and the diagram at the same time.
+Each numbered step is one trip around the diagram. Match what's on screen to the diagram as it goes.
 
-## Talk about this while it runs
+## What to notice
 
 - Every tool call is the model *asking*. Claude Code decides whether to run it. That gap is where permissions live.
-- `workspace/CLAUDE.md` told it to run tests first and announce each step. Claude Code loads that file into the context at startup, from the working directory and its parents; it's the part of the system prompt you control. Open the file and show it. (Your own mini agent in level 1 won't read it. Only Claude Code does. Remember that when the mini agent edits a test in level 3.)
-- Ask your guest: what does it need to know to make the second `pytest` call? (Answer: the result of the `Edit`, which is why results get fed back into the conversation. The conversation *is* the agent's memory.)
+- `workspace/CLAUDE.md` told it to run tests first and announce each step. Claude Code loads that file into the context at startup, from the working directory and its parents; it's the part of the system prompt you control. Open the file and read it. (Your own mini agent in level 1 won't load it automatically. Only Claude Code does; the mini agent only sees it if it happens to `read_file` it. Remember that when the mini agent edits a test in level 3.)
+- What does the model need to know to make the second `pytest` call? The result of the `Edit`, which is why results get fed back into the conversation. The conversation *is* the agent's memory.
 
-## If the live run goes sideways
+## If the run goes sideways
 
-Reset with `python -m harness.workspace` from the repo root and try once more. If it does something strange, that's also a conversation: the loop is the same, the model made a different choice. Move on to level 1, where you build the loop yourselves and it's fully under your control.
+Reset with `python -m harness.workspace` from the repo root and try once more. If it does something strange, that's also worth a look: the loop is the same, the model made a different choice. Move on to level 1, where you build the loop yourself and it's fully under your control.

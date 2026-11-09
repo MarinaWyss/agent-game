@@ -3,8 +3,8 @@
 Two people grade the same outputs against the same rubric, independently. Then compare
 them to each other and to the judge.
 
-    python level4_judge/calibrate.py grade --name marina
-    python level4_judge/calibrate.py grade --name guest
+    python level4_judge/calibrate.py grade --name alice
+    python level4_judge/calibrate.py grade --name bob
     python level4_judge/calibrate.py compare
 
 grade shows you each output and asks p/f per criterion. No API needed.

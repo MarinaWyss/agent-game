@@ -1,6 +1,6 @@
 """Level 1 solution. Same file as ../agent.py with the loop filled in.
 
-Use this if the live build stalls:
+Use this if the build stalls:
     python level1_loop/solution/agent.py "Run the tests and fix whatever fails."
 """
 import subprocess

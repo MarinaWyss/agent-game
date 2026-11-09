@@ -15,7 +15,7 @@ flowchart LR
 
 ## Type this
 
-Make the variant. Ask your guest what one line he'd add to make the agent better, and add it:
+Make the variant. Pick one line you think would make the agent better, and add it:
 
 ```
 cp harness/SYSTEM.md harness/SYSTEM_v2.md
@@ -34,15 +34,15 @@ Then:
 python level5_ab/run_all.py --n 2
 ```
 
-That's 2 runs x 6 tasks x 2 variants = 24 agent runs plus 12 judge calls. Budget 15 minutes. If time is tight, `--skip-level4` halves it.
+That's 2 runs x 6 tasks x 2 variants = 24 agent runs plus 12 judge calls, so this is the longest run in the repo. `--skip-level4` halves it.
 
-## Talk about this while it runs
+## What to notice
 
 - **This is why you wrote the evals.** Without them, "I added a line and it seemed better" is the whole story. With them, you can say B passed 11 of 12 where A passed 9, used 20% more tokens, and got worse on the README task. You can't argue with the table; you can only argue about what to measure.
 - **Prompt changes have side effects.** The "be concise" line probably helps the commit message and hurts the README. Every change to a shared system prompt is a change to every task it touches. Mixed eval sets catch that; a single happy-path test doesn't.
-- **Noise is real at this sample size.** 2 of 2 versus 1 of 2 is not a result. Say that on air. Then say that the fix is cheap: run `--n 5` overnight. Evals are the thing you can afford to run a hundred times when a human reviewer can't.
+- **Noise is real at this sample size.** 2 of 2 versus 1 of 2 is not a result. The fix is cheap: run `--n 5` overnight. Evals are the thing you can afford to run a hundred times when a human reviewer can't.
 - **This is also how you'd compare models.** Set `AGENT_MODEL` in `.env`, re-run. Same table, different question. Everyone wants to know "is the new model better for my task." This is the only honest way to find out.
 
 ## Close the loop
 
-Pull up `level0_watch/README.md` one last time. Everything from the last two hours fits in that one diagram plus a box around it. Claude Code is that box with a lot of good engineering inside. The evals are how you find out whether your box is any good.
+Pull up `level0_watch/README.md` one last time. Everything in this repo fits in that one diagram plus a box around it. Claude Code is that box with a lot of good engineering inside. The evals are how you find out whether your box is any good.

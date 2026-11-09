@@ -170,6 +170,19 @@ def parse_json(text: str) -> dict:
     try:
         return json.loads(m.group(0))
     except json.JSONDecodeError as e:
+        # Judges sometimes put unescaped quotes inside the reason string. For the flat
+        # one-verdict shapes (pairwise, numeric) the fields can still be pulled out.
+        salvaged = {}
+        w = re.search(r'"winner"\s*:\s*"([AB])"', text)
+        s = re.search(r'"score"\s*:\s*(\d+)', text)
+        r = re.search(r'"reason"\s*:\s*"(.*)"\s*}', text, re.S)
+        if w:
+            salvaged["winner"] = w.group(1)
+        if s:
+            salvaged["score"] = int(s.group(1))
+        if salvaged:
+            salvaged["reason"] = r.group(1) if r else "(reason unreadable)"
+            return salvaged
         return {"error": f"bad JSON from judge: {e}"}
 
 
@@ -272,7 +285,7 @@ def cmd_pairwise(args) -> None:
     for o in data["outputs"]:
         by_task.setdefault(o["task"], []).append(o)
 
-    flips = 0
+    flips = compared = 0
     for name, outs in by_task.items():
         if len(outs) < 2:
             print(f"{name}: need at least 2 outputs (run generate --n 2)")
@@ -284,15 +297,31 @@ def cmd_pairwise(args) -> None:
         ab = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, a=a, b=b))
         ba = ask(client, PAIRWISE_PROMPT.format(task=task["prompt"], rubric=rubric, a=b, b=a))
         # In the second call, "A" is really run 2. Translate back to run numbers.
-        first = "run 1" if ab.get("winner") == "A" else "run 2"
-        second = "run 2" if ba.get("winner") == "A" else "run 1"
-        consistent = first == second
-        flips += not consistent
+        first = _winner(ab, swapped=False)
+        second = _winner(ba, swapped=True)
         print(f"\n{name}")
-        print(f"  order (1,2): prefers {first:<6} {ab.get('reason', ab.get('error', ''))}")
-        print(f"  order (2,1): prefers {second:<6} {ba.get('reason', ba.get('error', ''))}")
-        print(f"  {'consistent' if consistent else 'FLIPPED: the judge preferred whichever came ' + ('first' if ab.get('winner') == 'A' else 'second')}")
-    print(f"\n{flips} of {len(by_task)} comparisons flipped when the order was swapped")
+        print(f"  order (1,2): prefers {first or 'n/a':<6} {ab.get('reason', ab.get('error', ''))}")
+        print(f"  order (2,1): prefers {second or 'n/a':<6} {ba.get('reason', ba.get('error', ''))}")
+        if first is None or second is None:
+            print("  no verdict: the judge didn't return a usable answer for one order")
+            continue
+        compared += 1
+        if first == second:
+            print("  consistent")
+        else:
+            flips += 1
+            print(f"  FLIPPED: the judge preferred whichever came {'first' if ab.get('winner') == 'A' else 'second'}")
+    print(f"\n{flips} of {compared} comparisons flipped when the order was swapped")
+
+
+def _winner(verdict: dict, swapped: bool) -> str | None:
+    """Map the judge's A/B answer back to a run number; None if the judge gave no usable answer."""
+    w = verdict.get("winner")
+    if w not in ("A", "B"):
+        return None
+    if swapped:
+        return "run 2" if w == "A" else "run 1"
+    return "run 1" if w == "A" else "run 2"
 
 
 def ask(client, prompt: str) -> dict:

@@ -28,7 +28,7 @@ flowchart LR
 python level3_evals/run_evals.py --n 3 --quiet
 ```
 
-Three tasks times three runs is nine agent runs. Budget 5 to 10 minutes. While it runs, talk. When the table prints, find a failure and open its transcript:
+Three tasks times three runs is nine agent runs, so this takes a while. When the table prints, find a failure and open its transcript:
 
 ```
 python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r['run'], r['reason']) for r in d['runs'] if not r['passed']]" level3_evals/results/*-baseline.json
@@ -36,10 +36,10 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r[
 
 (Or just open the JSON file. The `transcript` field for each run is the full tool-call sequence.)
 
-## Talk about this while it runs
+## What to notice
 
 - **Why N times.** One run tells you it *can* work. Several runs tell you how *often*. Engineers run it once, see green, ship. The fourth user gets the failure.
-- **Read the `95% CI` column out loud.** 3/3 comes with an interval of roughly 44% to 100%. Three runs can't tell an 80% agent from a perfect one. The column exists so nobody mistakes "100%" for knowledge. (Telling 70% from 90% with confidence takes about 60 runs per arm; see `FAQ.md`.)
+- **Read the `95% CI` column.** 3/3 comes with an interval of roughly 44% to 100%. Three runs can't tell an 80% agent from a perfect one. The column exists so nobody mistakes "100%" for knowledge. (Telling 70% from 90% with confidence takes about 60 runs per arm; see `FAQ.md`.)
 - **Grader design is the real work.** Look at `fix_failing_test/check.py`. Tests passing isn't enough; the agent could have deleted the assertion. The check also hashes the test file. Outcome checks ask "did it end up right?" Process checks ask "did it get there honestly?" You usually want both.
 - **Don't trust the agent's own tests.** `add_parse_date/check.py` calls the function with inputs the agent never saw. The agent's tests prove its code matches its understanding. Yours prove it matches the spec.
 - **Reason strings matter.** Every check returns *why* it failed. A pass rate tells you there's a problem. The reasons tell you which problem. Build evals you can debug from.
@@ -48,4 +48,4 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r[
 
 ## If every run passes
 
-That happens. Say so: "this task is too easy to be a useful eval." A good eval set has headroom. Then run `--n 5` on `add_parse_date` alone, which has the most ways to go subtly wrong, or move on to level 4 where you won't have this problem.
+That happens. It means this task is too easy to be a useful eval. A good eval set has headroom. Try `--n 5` on `add_parse_date` alone, which has the most ways to go subtly wrong, or move on to level 4 where you won't have this problem.

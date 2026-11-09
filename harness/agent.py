@@ -72,7 +72,7 @@ def run_agent(
         system = system.read_text()
 
     # The SDK retries rate limits (429), overloads (529) and connection errors on its own.
-    # 5 is generous so a live demo survives a busy API.
+    # 5 is generous so a run survives a busy API.
     client = anthropic.Anthropic(max_retries=5)
     messages = [{"role": "user", "content": task}]
     result = Result(model=model)
