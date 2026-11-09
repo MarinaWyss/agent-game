@@ -32,6 +32,12 @@ flowchart LR
 
 ## Type this
 
+**The three tasks.** Before you can say what a good answer looks like, you need to know the question. Each task is a folder in `tasks/` with a `prompt.txt` (exactly what the agent is told), a `task.json` (which part of the run gets graded), and a `rubric.md` (what counts as good). All three run on the same toy project as before.
+
+- **`commit_message`.** The agent is told: _"The test suite has one failing test. Fix it, then reply with ONLY a git commit message for the change (subject line, blank line, body). Nothing else in your final reply."_ So it fixes the same `slugify` bug from the earlier levels, and what gets graded is its final reply: the commit message itself. The rubric already checks for a short, imperative subject line ("Fix ...", not "Fixed ..."), a body that explains _why_ the change was needed and not just what changed, and no extra chatter around the message.
+- **`explain_trace`.** The workspace has a `trace.txt` with a short Python stack trace: a checkout request crashed with `KeyError: 'shipping_address'` because the `user` dictionary had no shipping address when `build_order` ran, on line 58 of `orders.py`. (Those files don't exist in the workspace. The agent only gets the trace, like you would from an error alert.) The agent is told to explain to a junior engineer who's been on the team for two weeks what went wrong and what to look at first, in under 150 words, without changing any files. Its final reply gets graded. The rubric already checks that it names the real cause, points to a concrete first place to look, pitches it at a junior engineer, and stays under 150 words.
+- **`write_readme`.** The agent is told: _"Write a README.md for this project. Someone who has never seen the code should understand what it does and how to run the tests."_ This time what gets graded is the `README.md` file it writes, not its reply. The rubric already checks that the first few lines say what the module is for, that it gives the exact command to run the tests, and that it doesn't make up features or files.
+
 **First, fill in the rubrics.** Open each `tasks/*/rubric.md`. Each one has three or four criteria already written and one `TODO` line. Decide what _you_ would want from a good commit message (or README, or explanation), and write it in. It takes a couple of minutes, and it's the most important part of the level.
 
 Then:
