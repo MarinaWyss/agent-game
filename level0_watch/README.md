@@ -48,7 +48,7 @@ Then give it one task:
 Run the tests and fix whatever fails.
 ```
 
-`--verbose` shows the full tool calls and results instead of collapsing them. (Inside a session, **Ctrl+O** toggles the same transcript view.) Claude Code will ask permission before it runs a shell command or edits a file. Say yes.
+`--verbose` shows the full tool calls and results instead of collapsing them. (Inside a session, **Ctrl+O** toggles the same transcript view.) Claude Code may ask permission before it runs a shell command or edits a file; say yes. If you've set it to auto-approve, it won't ask, and that's fine too.
 
 ## What you should see
 
@@ -64,6 +64,33 @@ The task is designed so there is only one sensible path. Expect roughly this seq
 The details will vary. It might read both files in one turn, or make the edit through `Bash` instead of `Edit`. The shape stays the same: run the tests, look, change, run the tests again, stop. Each numbered step is one trip around the diagram. Match what's on screen to the diagram as it goes.
 
 **If its first move is `ls` on a folder full of `level*` directories, or it reads the top-level `README.md`,** you started it in the repo root. Quit (`/exit`), `cd workspace`, and start again. It's also a nice preview of level 2: same model, same task, different context, different behavior.
+
+## How to read the transcript
+
+The output mixes three kinds of lines. Telling them apart is how you see the loop.
+
+```
+I'll run the test suite first to see what's failing.      <- the model talking
+
+⏺ Bash(python -m pytest -q 2>&1 | tail -40)               <- the model ASKING for a tool
+  .F..                                       [100%]       <- what Claude Code ran and sent back
+  FAILED test_utils.py::test_slugify_lowercases ...
+  1 failed, 3 passed in 0.02s
+
+One failure: slugify doesn't lowercase. I'll look at       <- the model again, having read the result
+the source and the tests.
+
+⏺ Bash(ls && cat utils.py test_utils.py)                   <- next request: one more trip around the loop
+```
+
+- **A `⏺` line is a request, not an action.** The model can't run anything. Its reply contains a structured message that amounts to "please call the `Bash` tool with this command." The `⏺` line is Claude Code showing you that request: the tool name, and the arguments in parentheses.
+- **The indented text under a `⏺` line is the tool result.** Claude Code ran the command itself, captured the output, and added it to the conversation as the next message. That's the arrow from "Run the tool" back to the top of the diagram.
+- **Plain sentences are the model's own text.** It writes one before each request because `workspace/CLAUDE.md` tells it to. Watch how each sentence reacts to the result just above it: it decides what to do next only after it has seen what happened.
+- **The last message has no `⏺` line after it.** That's the "plain text, no tool call" exit. The model stopped asking, so the loop stopped.
+
+So each `⏺` line plus its result is one trip around the diagram. Count them, and you've counted the loop.
+
+Between the request and the result, Claude Code decides whether to run the command at all. With default settings you see that as a permission prompt. With auto-approve on, it happens silently: your settings said yes before the model asked. Either way the model only asked. Level 2 makes this gap visible on purpose: the harness stops and asks `allow? [y/N]` before every shell command.
 
 ## What to notice
 
