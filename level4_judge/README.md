@@ -6,7 +6,7 @@
 
 Most of what agents produce can't be checked with an `assert`: a commit message, an explanation, a README. Teams usually do one of two things with that kind of output. They skip evaluating it, or they ask a model "is this good?" and trust whatever it says. Neither is great.
 
-This level shows the middle path. Write down what good means as pass/fail criteria, let a second model apply them, and then check that model against humans before you rely on it.
+This level shows the middle path. Write down what good means as pass/fail criteria, let a second model apply them, and then check that model against a human (you) before you rely on it.
 
 **What to expect.** Most of the real work is the first step: adding your own criterion to each of the three rubrics. After that, the agent writes six texts and the judge grades each one twice. With tight pass/fail criteria, the judge mostly agrees with itself. When it doesn't, it's usually on the vaguest criterion, and that's a useful thing to find out.
 
@@ -18,15 +18,15 @@ Finally, you grade the same outputs by hand, and a table shows you where you and
 
 ## What this is
 
-Three tasks whose output is text: a README, a commit message, and an explanation of a stack trace. No `assert` can grade these. Instead, each task has a `rubric.md` with pass/fail criteria, and `judge.py` asks a second model to apply the rubric. Then `calibrate.py` has you (and ideally someone else) apply the same rubric by hand, and shows where the humans and the judge disagree.
+Three tasks whose output is text: a README, a commit message, and an explanation of a stack trace. No `assert` can grade these. Instead, each task has a `rubric.md` with pass/fail criteria, and `judge.py` asks a second model to apply the rubric. Then `calibrate.py` has you apply the same rubric by hand, and shows where you and the judge disagree.
 
 ```mermaid
 flowchart LR
     G["generate<br/>agent writes 3 texts"] --> O[(outputs.json)]
     R["rubric.md<br/>criteria you wrote"] --> J
     O --> J["grade<br/>judge model: pass/fail<br/>per criterion + reason"]
-    O --> H["calibrate<br/>humans grade by hand"]
-    J --> C["compare<br/>human vs human vs judge"]
+    O --> H["calibrate<br/>you grade by hand"]
+    J --> C["compare<br/>you vs the judge"]
     H --> C
 ```
 
@@ -145,96 +145,115 @@ explain_trace
 
 The `prefers run N` part is already translated back to run numbers. The reasons aren't, though. In the `(2,1)` line, "Output A" is run 2, because that's the one the judge saw first. So the two reasons above actually agree with each other. If you see `FLIPPED`, the judge preferred whichever output came first (or second) both times, which is position bias. Getting `0 of 3 comparisons flipped` is a normal result too.
 
-## Calibrate: check the rubric against real readers
+## Calibrate: check the rubric against a real reader
 
 **Instructions that seem easy to check are often confusing.** This is the part engineers tend to skip, and it's the part that matters most.
 
-When you wrote "pitched at a junior engineer: no unexplained jargon," it probably felt clear. You knew what you meant. But the judge just split on that exact criterion: same output, same words, two different verdicts. And it wasn't being random. Both rounds pointed at the same terms ("call chain," "a 500," `.get()`) and disagreed about whether they count as jargon. Another person reading your rubric could easily do the same thing.
+When you wrote "pitched at a junior engineer: no unexplained jargon," it probably felt clear. You knew what you meant. But the judge just split on that exact criterion: same output, same words, two different verdicts. And it wasn't being random. Both rounds pointed at the same terms ("call chain," "a 500," `.get()`) and disagreed about whether they count as jargon. If the judge can read your sentence two ways, so can a person.
 
-Calibration is how you find that out on purpose, instead of discovering it later when your eval numbers stop making sense. You grade the same outputs the judge graded, using only the rubric's words. Then you line up everyone's answers and look at where they differ. Every disagreement points at a sentence somebody read differently than you meant it.
+Calibration is how you find that out on purpose, instead of discovering it later when your eval numbers stop making sense. You grade the same outputs the judge graded, using only the rubric's words. Then you line up your answers next to the judge's and look at every place they differ. Each difference points at a sentence that can be read more than one way, or at a judge that's misreading it.
 
 ### Step 1: grade the outputs yourself
 
 ```
-python level4_judge/calibrate.py grade --name <your name>
+python level4_judge/calibrate.py grade
 ```
 
-This shows you each of the six outputs, one at a time: the task the agent was given, the agent's output, and then each criterion from the rubric. For every criterion, type `p` for pass or `f` for fail. It doesn't call the API at all. Your answers are saved to `results/human-<your name>.json`.
+It starts with a short explanation, then shows you the six outputs one at a time. Each one is laid out like this:
+
+```
+======================================================================
+OUTPUT 1 OF 6: commit_message (run 1)
+======================================================================
+
+WHAT THE AGENT WAS ASKED:
+  The test suite has one failing test. Fix it, then reply with ONLY a git commit message ...
+
+WHAT IT PRODUCED (its final reply):
+  | Lowercase slugs in slugify
+  |
+  | slugify() documents that it turns "Hello World!" into "hello-world".
+  | It never lowercased its input, so it returned "Hello-World". ...
+
+THE RUBRIC (3 criteria):
+  1. Subject line is 72 characters or fewer and written in the imperative ...
+  2. Body explains WHY the change was needed ..., not only what changed
+  3. Contains nothing besides the commit message: no "Here's a commit message:", ...
+
+Now grade the output against each criterion.
+
+  Criterion 1 of 3: Subject line is 72 characters or fewer and written in the imperative ...
+    pass or fail? [p/f]
+```
+
+So you're never grading the output as a whole. You're answering one yes/no question at a time: does _this_ output meet _this_ criterion? Type `p` or `f` for each, and it moves on. That's 20 answers in total. It doesn't call the API, and your answers are saved to `results/human-me.json`.
 
 A few things that make this work better:
 
-- **Grade what the rubric says, not what you meant.** If a criterion is vague enough that you're unsure, notice that. It's a finding, not a mistake on your part.
-- **Don't look at the judge's grades first.** Scroll past them or close that terminal. Once you've seen its answer, it's very hard not to anchor on it.
-- **You'll be asked about the `[checked by code]` criteria too.** Count if you want to, or just answer honestly. It's a nice check that the code and you agree on what "150 words" means.
+- **Grade what the criterion says, not what you meant when you wrote it.** If you can't decide, notice that. It's a finding, not a mistake on your part.
+- **Don't look back at the judge's grades first.** Once you've seen its answer, it's really hard not to anchor on it.
+- **You'll be asked about the `[checked by code]` criteria too.** Count if you want, or just answer honestly. It's a nice check that the code and you agree on what "150 words" means.
 
-### Step 2: get a second reader
-
-```
-python level4_judge/calibrate.py grade --name <second grader>
-```
-
-This step is optional, but I'd really recommend it. The best second grader is someone who _didn't_ write the rubric, because all they have is the words. You, on the other hand, also have everything you meant and didn't write down. Have them grade on their own screen, and don't compare notes until both of you are done.
-
-If there's nobody around, you can get a second opinion from a different model instead. Re-run the judge with a different `JUDGE_MODEL`, then compare again, and the `judge` column will show how that model read your rubric:
-
-```
-JUDGE_MODEL=claude-sonnet-5-5 python level4_judge/judge.py grade
-```
-
-(That overwrites the previous judge grades, so re-run plain `judge.py grade` afterwards if you want the default judge back.)
-
-### Step 3: compare
+### Step 2: compare yourself with the judge
 
 ```
 python level4_judge/calibrate.py compare
 ```
 
-You get one row per criterion per output, with a column for every grader, including the judge. Here's what it looks like from a test run with two graders (trimmed):
+You get one row per criterion per output, with your verdict next to the judge's. Then, for every row where you disagree, it shows the judge's reason. Here's an example where the human grader was strict about jargon:
 
 ```
-task / criterion                                              tester1  tester2    judge
------------------------------------------------------------------------------------------
-commit_message r1: Body explains WHY the change was needed (     pass     pass     pass
-explain_trace r1: Pitched at a junior engineer: no unexplain     pass     fail     fail  <--
-explain_trace r2: max words 150  [checked by code]               pass     pass     fail  <--
-write_readme r1: Does not invent features, options, or files     pass     fail     pass  <--
+task / criterion                                                   me    judge
+--------------------------------------------------------------------------------
+explain_trace r1: Pitched at a junior engineer: no unexplain     fail     fail
+explain_trace r1: max words 150  [checked by code]               pass     pass
+explain_trace r2: Pitched at a junior engineer: no unexplain     fail     pass  <--
+explain_trace r2: max words 150  [checked by code]               fail     fail
 ...
 
 agreement (share of criteria where both graders gave the same verdict):
-  tester1 vs tester2: 16/20 (80%)
-  tester1 vs judge: 18/20 (90%)
-  tester2 vs judge: 16/20 (80%)
+  me vs judge: 19/20 (95%)
+
+where the graders disagreed:
+
+  explain_trace run 2, criterion 3: Pitched at a junior engineer: no unexplained jargon, ...
+    me: fail, judge: pass
+    judge's reason: The explanation is plain and assumes Python basics like KeyError and dictionaries,
+    though terms like 'call chain' and '.get()' are used without explanation, which is borderline.
 ```
 
-- **`<--`** marks every row where the graders didn't all agree. Those rows are the whole point. Skim past the rest.
-- **The agreement lines** tell you how often each pair of graders matched, across every criterion. They're a useful summary, but the individual `<--` rows tell you what to actually fix.
+- **`<--`** marks every row where you and the judge disagree. Those are the rows that matter.
+- **The agreement line** is a quick summary. 95% sounds great, but look at _where_ the 5% is. Here it's the same vague criterion that split earlier, which is not a coincidence.
+- **The judge's reason** is the most useful part. In this example, the judge noticed exactly the same words you did ("call chain," `.get()`) and just drew the line in a different place. It even called its own verdict "borderline."
 - **The `judge` column** uses the first round from your last `judge.py grade` run, the same as the pass-rate table.
 
-If you change the outputs (by running `generate` again) or edit a rubric, everyone's old grades no longer line up with what's in front of them. `compare` checks for that, skips anyone whose grades are out of date, and tells you who needs to re-grade.
+If you change the outputs (by running `generate` again) or edit a rubric, your old grades no longer line up with what's in front of you. `compare` checks for that, skips grades that are out of date, and tells you to re-grade.
 
-### Step 4: decide what each disagreement means
+### Step 3: decide what each disagreement means
 
-Every `<--` row falls into one of a few patterns:
+For every `<--` row, read the judge's reason and ask: is this a fair reading of the words I wrote?
 
-| what you see | what it probably means | what to do |
+| what the judge's reason shows | what it means | what to do |
 |---|---|---|
-| the humans disagree with each other | the criterion is ambiguous | rewrite it until two people would read it the same way |
-| the humans agree, the judge doesn't | the judge is misreading it | make the criterion more explicit, add an example, tighten `JUDGE_PROMPT.md`, or try a stronger judge model |
-| everyone disagrees with the `[checked by code]` result | your code check measures something different than people expect | fix the check, or rename it so it says what it really measures |
-| everyone agrees | the criterion works | you can trust the judge on this one |
+| a fair reading, just not the one you meant | the criterion is ambiguous | rewrite it until there's only one reasonable reading |
+| it misread the output, or missed something that's there | the judge is the problem | make the criterion more explicit, add an example, tighten `JUDGE_PROMPT.md`, or try a stronger judge model |
+| it couldn't have known (it says it can't verify something) | the judge is missing information | give it what it needs, the way `write_readme` now gets the project files, or move the check to code |
+| you disagree with a `[checked by code]` result | the code measures something different than you expected | fix the check, or rename it so it says what it really measures |
 
-Most of the time, the fix is rewriting the criterion. A few moves that tend to help:
+In the example above, it's the first row: "borderline" is the judge telling you the criterion has a gray zone. Most of the time the fix is rewriting the criterion. A few moves that tend to help:
 
 - **Name the specifics.** Instead of "no unexplained jargon," try "explains any term a two-week junior might not know (for example HTTP status codes or `.get()`), or avoids using it."
-- **Split it.** "No unexplained jargon, no condescension, assumes they know Python basics" is really three criteria. If people disagree on one, you can't tell which part.
-- **Make it observable.** "Is clear" is a feeling. "Names the file and line number to look at first" is something two people can check the same way.
+- **Split it.** "No unexplained jargon, no condescension, assumes they know Python basics" is really three criteria. If you and the judge disagree on it, you can't tell which part you disagree about.
+- **Make it observable.** "Is clear" is a feeling. "Names the file and line number to look at first" is something two readers can check the same way.
 - **Add an example of a pass and a fail** right in the rubric line, if the boundary is subtle.
 
-### Step 5: do it again
+### Step 4: do it again
 
-After you change a criterion, re-run `judge.py grade --twice` and grade by hand again. You're done when the people agree with each other and the judge agrees with the people, on every criterion you plan to let the judge handle alone.
+After you change a criterion, re-run `judge.py grade --twice`, then grade by hand again (your old grades get skipped automatically, since the rubric changed). You're done when you and the judge agree on every criterion you plan to let it handle alone.
 
-And it's not a one-time thing. New outputs bring new edge cases nobody thought of when the rubric was written. Every time you change the rubric, the agent, or the judge model, it's worth re-checking a sample by hand. A judge you calibrated once, six months ago, against outputs that no longer look like today's, isn't really calibrated anymore.
+And it's not a one-time thing. New outputs bring edge cases nobody thought of when the rubric was written. Every time you change the rubric, the agent, or the judge model, it's worth re-checking a sample by hand. A judge you calibrated once, months ago, against outputs that don't look like today's, isn't really calibrated anymore.
+
+**On a real team, add more readers.** One person plus a judge is enough to learn the habit. In practice, the most useful extra grader is someone who _didn't_ write the rubric, because all they have is the words, and you also have everything you meant and didn't write down. `calibrate.py grade --name <their name>` saves their answers separately on the same machine, and `compare` shows every grader side by side. A different judge model works as a cheap extra reader too: `JUDGE_MODEL=claude-sonnet-5-5 python level4_judge/judge.py grade` re-grades with Sonnet, and the `judge` column will show how it read your rubric. (Re-run plain `judge.py grade` afterwards to get the default judge back.)
 
 ## What to notice
 
@@ -252,7 +271,7 @@ Good! Pass/fail against a tight rubric _should_ be stable. The `--numeric` and `
 ## Questions you might have
 
 **You're using a model to grade a model. Why would I trust that?**
-You shouldn't, until you've checked it. That's what `calibrate.py` is for. You (and ideally another person) grade the same outputs against the same rubric, then compare against the judge. Where the humans agree and the judge doesn't, fix the judge prompt. Where the humans disagree, fix the rubric. Where everyone agrees, you can let the judge handle that criterion on its own. Trust gets earned one criterion at a time.
+You shouldn't, until you've checked it. That's what `calibrate.py` is for. You grade the same outputs against the same rubric, then compare against the judge. Where you disagree, the judge's reason tells you whether the criterion is ambiguous or the judge misread it, and you fix whichever one it is. Where you agree, you can let the judge handle that criterion on its own. Trust gets earned one criterion at a time.
 
 **Why pass/fail per criterion instead of a score out of 10?**
 A 7/10 is unstable (run `grade --numeric --twice` and watch it move), hard to interpret (7 out of what, exactly?), and doesn't tell you what to do. "Fails criterion 2: the body doesn't say why" is stable, clear, and tells you what to fix. Break the vague judgment into specific yes/no questions and there's very little subjectivity left.
