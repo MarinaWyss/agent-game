@@ -69,7 +69,24 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(r['task'], r[
 
 ## What to notice
 
-- **Why N times.** One run tells you it _can_ work. Several runs tell you how _often_ it works. It's really tempting to run something once, see green, and ship it. Then the fourth user gets the failure.
+### Why run it N times?
+
+If you come from regular software engineering, this is the part that feels wrong. Same code, same input, same environment: you should get the same output. That's what a function does, and it's what every test you've ever written assumes.
+
+An agent doesn't work that way, for a few reasons that stack on top of each other:
+
+- **The model samples.** At each step, the model doesn't compute one answer. It produces a probability for every possible next word and then picks one, with some randomness. Most of the time the likely choice wins, but not always. So the same prompt can come back worded differently, or with a different plan.
+- **Small differences snowball.** In a normal program, a tiny difference stays tiny. In an agent, each reply decides the next tool call, and each tool result becomes part of the next prompt. Say the model runs `pytest` instead of `pytest -q` on turn 1. Now the output it reads is different, so its next decision is made on different input, and the two runs drift further apart every turn. One different word early on can lead to a completely different path by turn 5.
+- **The thinking varies too.** Current models reason before they act, and that reasoning is sampled the same way. Two runs can talk themselves into two different approaches to the same bug.
+- **Turning the randomness down doesn't fully fix it.** Even at temperature 0, tiny numerical differences in how the servers batch and compute requests can flip a close call. (There's more on temperature in the questions below.)
+
+You've already seen this in this repo. In level 0, the README expects an `Edit`, but the same fix can come out as a `sed` command one run and a little Python script the next. In levels 1 and 2, the agent sometimes ran `pytest -q` and sometimes plain `pytest`, and bundled `ls` into the same command. None of those differences mattered for that task. But the same kind of variation is what makes an agent occasionally edit the test instead of the code, or stop before it's done.
+
+So the useful mental model isn't "a function you test once." It's closer to a colleague: usually reliable, sometimes not, and the only way to know how reliable is to watch a bunch of attempts. Or, if you prefer, a flaky test that you can't fix, only measure.
+
+That's why you run every task N times. One run tells you it _can_ work. Several runs tell you how _often_ it works. It's really tempting to run something once, see green, and ship it. Then the fourth user gets the failure.
+
+### Everything else to notice
 - **Look at the `95% CI` column.** 3 out of 3 comes with an interval of roughly 44% to 100%. Three runs can't tell an 80% agent from a perfect one. The column is there so nobody mistakes "100%" for knowing something. (Telling 70% from 90% with any confidence takes about 60 runs per version; more on that below.)
 - **Designing the grader is the real work.** Look at `fix_failing_test/check.py`. Passing tests aren't enough, because the agent could have just deleted the assertion. So the check also hashes the test file. Outcome checks ask "did it end up right?" Process checks ask "did it get there honestly?" You usually want both.
 - **Don't trust the agent's own tests.** `add_parse_date/check.py` calls the function with inputs the agent never saw. The agent's tests prove its code matches its own understanding of the task. Yours prove it matches what you actually asked for.
