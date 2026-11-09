@@ -4,7 +4,7 @@
 
 ## Why this level
 
-The loop from level 1 works, but I wouldn't let it anywhere near a real codebase. It runs any command it's asked to, keeps going as long as the model keeps asking, and leaves no record of what happened. A **harness** is everything you put around the loop to fix that: what the model is told, what it's allowed to do, when it has to stop, and what gets written down.
+The loop from level 1 works, but it's missing a few things you'd want before using it on a real project. It runs any command it's asked to, keeps going as long as the model keeps asking, and leaves no record of what happened. A **harness** is everything you put around the loop to fix that: what the model is told, what it's allowed to do, when it has to stop, and what gets written down.
 
 Most of what makes Claude Code good is harness, not model. The same model in a worse harness is a worse agent.
 
